@@ -1,5 +1,5 @@
 ---
-name: Content idea (blog / tutorial / newsletter / podcast / video)
+name: Content idea
 about: Share your idea for a new article
 title: "{title}"
 labels:
@@ -10,9 +10,6 @@ assignees:
 ## Summary
 
 > _Write a short paragraph explaining your idea. If applicable, what's the opinion or point we want to make? What will a reader, listener, or viewer get out of this?_
->
-> - Please add a label (e.g. blog, newsletter, podcast, video, etc.)
-> - Please add to the relevant project board (if one exists)
 
 ## Headline options
 
