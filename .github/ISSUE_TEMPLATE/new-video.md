@@ -11,9 +11,4 @@ assignees:
 - **Project Code:** 
 - **Lead(s):**
 - **Editor(s):** 
-- **Deadline:** TBC
 - **Link to Folder:**
-- **Link to Script:** 
-- **Frame Link:** n/a
-- **Link to Final File:**
-- **Link to Published Video:**
