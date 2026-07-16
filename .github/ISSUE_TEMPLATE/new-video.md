@@ -1,5 +1,5 @@
 ---
-name: New Video Project
+name: Video project
 about: New video project
 title: "Title of Video - [PROJECT CODE]"
 labels:
