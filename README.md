@@ -1,3 +1,3 @@
-# Content
+# Marketing
 
-A single place for all content planning issues, RFCs, and updates.
+A single place for all marketing planning issues, RFCs, and updates.
