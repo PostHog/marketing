@@ -1,7 +1,13 @@
 # Marketing
 
-A single place for all marketing planning issues, updates, etc. 
+A single place for all marketing planning issues, updates, etc.
 
-Notes for use:
+Things you should post here:
+- Art requests
+- Content ideas / plans
+- Messaging issues
+- Launch plans and checklists
+
+**Important:**
 - RFCs should continue to posted in the request for comments repos
-- This is a public repo. If something needs to be private, use request-for-comments-internal or company-internal
+- If something needs to be private, use request-for-comments-internal or company-internal
