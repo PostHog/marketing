@@ -2,6 +2,7 @@
 name: AEO/SEO Blog post
 about: Track a new SEO/AEO blog post or content optimization
 title: "[SEO/AEO Blog post] "
+labels: blog
 ---
 
 ## Summary
