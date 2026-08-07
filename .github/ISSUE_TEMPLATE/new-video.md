@@ -2,7 +2,7 @@
 name: Video project
 about: New video project
 title: "Title of Video - [PROJECT CODE]"
-labels:
+labels: video
 assignees: 
 
 ---
