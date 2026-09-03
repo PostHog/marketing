@@ -167,8 +167,27 @@ Add 4 repository secrets under **Settings → Secrets and variables → Actions*
 
 Create the Octolens key in **Octolens → Settings → API keys**.
 
-The Slack app needs the `files:write` and `chat:write` scopes. **Invite the app
-to the channel.** The upload fails with `not_in_channel` if you do not.
+### Create the Slack app
+
+The app does not exist yet. Create it from
+[`slack-app-manifest.yml`](./slack-app-manifest.yml), which carries the correct
+scopes:
+
+1. Go to <https://api.slack.com/apps> and select **Create New App**.
+2. Select **From a manifest**, then the workspace.
+3. Select **YAML**, and paste the manifest file.
+4. Select **Create**, then **Install to Workspace**.
+5. Copy the **Bot User OAuth Token** (`xoxb-...`) into `SLACK_BOT_TOKEN`.
+6. Invite the app to the channel: `/invite @Banger Bot`. The upload fails with
+   `not_in_channel` if you skip this step.
+
+A person with workspace permissions must do this. Slack does not let an
+automated job create an app.
+
+To set the icon, open **Basic Information → Display Information → App icon**
+after step 4. A Slack manifest cannot carry an image, so the icon is the one
+part you upload by hand. The bot cannot change the icon for each milestone,
+because a file upload does not accept a per message icon.
 
 An incoming webhook cannot upload a file, so the bot needs the app token. This
 is why the bot does not use the webhook pattern that other PostHog workflows
