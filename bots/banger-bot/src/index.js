@@ -78,7 +78,7 @@ async function main() {
     const apiKey = process.env.OCTOLENS_API_KEY
     const slackToken = process.env.BANGER_BOT_SLACK_TOKEN
     const channelId = process.env.BANGER_BOT_SLACK_CHANNEL_ID
-    const anthropicKey = process.env.ANTHROPIC_API_KEY
+    const anthropicKey = process.env.BANGER_BOT_ANTHROPIC_API_KEY
     const dryRun = process.env.DRY_RUN === 'true'
     const configPath = process.env.BANGER_BOT_CONFIG || DEFAULT_CONFIG
     const statePath = process.env.BANGER_BOT_STATE || DEFAULT_STATE
@@ -155,7 +155,7 @@ async function main() {
 
     // ── 3. Announce the new milestones ────────────────────────────────────
     if (!anthropicKey) {
-        log.warn('ANTHROPIC_API_KEY is not set. The gut check runs on the phrase list only.')
+        log.warn('BANGER_BOT_ANTHROPIC_API_KEY is not set. The gut check runs on the phrase list only.')
     }
 
     let posted = 0

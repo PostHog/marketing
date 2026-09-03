@@ -6,7 +6,8 @@
 //
 // The check has 2 layers:
 //   1. A phrase list in config.json. It runs always, and it costs nothing.
-//   2. A judgment call by Claude. It runs when ANTHROPIC_API_KEY is set.
+//   2. A judgment call by Claude. It runs when BANGER_BOT_ANTHROPIC_API_KEY
+//      is set.
 //
 // The check fails closed. When the phrase list matches, the bot never posts.
 // When Claude cannot answer, the bot posts nothing for that run and it tries
