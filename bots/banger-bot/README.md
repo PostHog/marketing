@@ -193,9 +193,23 @@ An incoming webhook cannot upload a file, so the bot needs the app token. This
 is why the bot does not use the webhook pattern that other PostHog workflows
 use.
 
-Then open the **Actions** tab. Select **Banger Bot**. Select **Run workflow**,
-and set `dry_run` to `true`. The bot draws the images and posts nothing. Get
-them from the `banger-bot-preview` artifact on the run.
+### Turn it on, in this order
+
+1. Create the Slack app, install it, and copy the bot token.
+2. Invite the app to the channel.
+3. Add the 4 secrets.
+4. **Merge this branch.** GitHub lists a `workflow_dispatch` workflow only when
+   the file is on the default branch, and a schedule only runs there. You
+   therefore cannot test the bot from the branch.
+5. Open the **Actions** tab. Select **Banger Bot**, then **Run workflow**, and
+   set `dry_run` to `true`. The bot draws the images and posts nothing. Get
+   them from the `banger-bot-preview` artifact on the run.
+6. Read the coverage lines in the job log. They say how many of the accounts
+   Octolens holds posts for.
+
+The first live run records the current like counts and posts nothing. This is
+correct. It stops the bot from announcing every old post at once. A run after
+that one posts as normal.
 
 ### Check the account handles
 
