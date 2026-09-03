@@ -5,11 +5,35 @@ Banger Bot posts to `#team-editorial` when a post on X passes a like milestone.
 It watches the PostHog brand account and the affiliated employee accounts. The
 account list is in [`config.json`](./config.json).
 
-The default milestones are 250, 500, 1,000, and 3,000 likes. The bot announces
-each milestone one time for each post.
+The milestones are 250, 500, 1,000, and 3,000 likes. The bot announces each
+milestone one time for each post.
 
-> **Status: scaffolding.** The pipeline works end to end. The Slack message is a
-> placeholder. See [Design the message](#design-the-message).
+Each message carries an image of the post. The image gets a different meme
+overlay for each milestone.
+
+## The images
+
+| Milestone | Overlay                                                    |
+| --------- | ---------------------------------------------------------- |
+| 250       | The pointing soyjaks, in the foreground.                    |
+| 500       | The pog mouth, centered in the foreground.                  |
+| 1,000     | The glowing-eyes Shaq cutout, with a glow behind it.         |
+| 3,000     | A nuclear blast, and "BOMBA" in red Impact across the width. |
+
+[`render/banger_image.py`](./render/banger_image.py) draws every image. It is
+the only file that decides how an image looks.
+
+To review a design change, draw one sample for each milestone:
+
+```sh
+python3 render/banger_image.py --samples ./samples
+```
+
+The workflow runs the same command on each run. A missing asset, a missing
+font, or a broken layout therefore fails the job before the bot posts anything.
+
+To add a milestone, add it to `thresholds` in `config.json` and to `TIERS` in
+`render/banger_image.py`. A milestone with no tier draws a plain card.
 
 ## Where the numbers come from
 
@@ -19,7 +43,6 @@ therefore adds no vendor cost.
 
 Octolens refreshes the public engagement counters on the posts that it holds.
 Each post carries an `engagementMetrics` map and an `engagementObservedAt` time.
-The bot reads `likes` from that map.
 
 ### Coverage: read this before you trust the bot
 
@@ -35,7 +58,7 @@ run therefore logs a coverage line:
 
 ```
 Coverage: 14 post(s) inside the 96 hour window, from 5 of 12 account(s).
-No posts in the window from: @minchev, @yo_puaaa, ...
+No posts in the window from: @example, @example2
 Engagement observed between 12 and 47 minute(s) ago.
 ```
 
@@ -55,44 +78,56 @@ runs the bot every 2 hours. One run does 5 steps:
 
 1. It reads the recent posts of each account from Octolens.
 2. It keeps the posts that are inside `trackWindowHours`.
-3. It posts one Slack message for each post that passed a new milestone.
+3. It draws an image for each post that passed a new milestone, and it uploads
+   the image to Slack.
 4. It logs the coverage and the age of the engagement data.
 5. It writes the state file.
 
 A post can pass two milestones between two runs. The bot then posts one message
 for the largest milestone. It marks the smaller milestones as announced.
 
-One run makes one request for each account. The Octolens limit is 500 requests
-each hour for the whole organization, and the bot uses about 72 each day. Other
-PostHog automations share that limit.
+One run makes one Octolens request for each account. The Octolens limit is 500
+requests each hour for the whole organization, and the bot uses about 72 each
+day. Other PostHog automations share that limit.
 
 ## Files
 
-| File                   | Purpose                                          |
-| ---------------------- | ------------------------------------------------ |
-| `config.json`          | Accounts, milestones, and the tracking window.    |
-| `src/index.js`         | The run order. It calls the other modules.        |
-| `src/octolens-api.js`  | The Octolens client and the mention mapping.      |
-| `src/state.js`         | The state file and the prune step.                |
-| `src/milestones.js`    | The threshold logic. The unit tests cover it.     |
-| `src/message.js`       | The Slack message. **Change this file only.**     |
-| `src/slack.js`         | The webhook transport.                            |
-| `test/`                | Unit tests for the pure functions.                |
+| File                    | Purpose                                        |
+| ----------------------- | ---------------------------------------------- |
+| `config.json`           | Accounts, milestones, and the tracking window.  |
+| `src/index.js`          | The run order. It calls the other modules.      |
+| `src/octolens-api.js`   | The Octolens client and the mention mapping.    |
+| `src/state.js`          | The state file and the prune step.              |
+| `src/milestones.js`     | The threshold logic. The unit tests cover it.   |
+| `src/image.js`          | Starts the Python renderer.                     |
+| `src/message.js`        | The text above the image.                       |
+| `src/slack.js`          | The Slack upload.                               |
+| `render/banger_image.py`| The image layout. **Change this for a redesign.** |
+| `assets/`               | The meme art, the blast photo, and the fonts.   |
+| `test/`                 | Unit tests for the pure functions.              |
 
 ## Setup
 
-Add 2 repository secrets under **Settings → Secrets and variables → Actions**:
+Add 3 repository secrets under **Settings → Secrets and variables → Actions**:
 
-| Secret                         | Value                                          |
-| ------------------------------ | ---------------------------------------------- |
-| `OCTOLENS_API_KEY`             | An Octolens API key with the `read` scope.      |
-| `SLACK_WEBHOOK_TEAM_EDITORIAL` | An incoming webhook that posts to the channel.  |
+| Secret              | Value                                              |
+| ------------------- | -------------------------------------------------- |
+| `OCTOLENS_API_KEY`  | An Octolens API key with the `read` scope.          |
+| `SLACK_BOT_TOKEN`   | A Slack bot token, `xoxb-...`.                      |
+| `SLACK_CHANNEL_ID`  | The id of `#team-editorial`.                        |
 
-Create the Octolens key in **Octolens → Settings → API keys**. The webhook
-decides the Slack channel, so the bot code does not name a channel.
+Create the Octolens key in **Octolens → Settings → API keys**.
+
+The Slack app needs the `files:write` and `chat:write` scopes. **Invite the app
+to the channel.** The upload fails with `not_in_channel` if you do not.
+
+An incoming webhook cannot upload a file, so the bot needs the app token. This
+is why the bot does not use the webhook pattern that other PostHog workflows
+use.
 
 Then open the **Actions** tab. Select **Banger Bot**. Select **Run workflow**,
-and set `dry_run` to `true`. The job log then prints the Slack payload.
+and set `dry_run` to `true`. The bot draws the images and posts nothing. Get
+them from the `banger-bot-preview` artifact on the run.
 
 ### Check the account handles
 
@@ -126,29 +161,15 @@ one missed announcement. It never causes a flood of old posts.
 
 ## Run it on your machine
 
-The bot needs Node 22 or later. It has no dependencies.
+The bot needs Node 22 or later, Python 3, and Pillow.
 
 ```sh
 cd bots/banger-bot
+python3 -m pip install pillow
 npm test
 
-OCTOLENS_API_KEY=... DRY_RUN=true node src/index.js
+OCTOLENS_API_KEY=... DRY_RUN=true BANGER_BOT_IMAGE_DIR=./preview node src/index.js
 ```
 
-A dry run prints the payload, and it posts nothing. A dry run does not write the
-state file, so a later run still posts the milestone.
-
-## Design the message
-
-`src/message.js` builds the Slack payload. It is the only file that decides how
-the message looks.
-
-To try a design:
-
-1. Edit `renderBangerMessage` in `src/message.js`.
-2. Run the workflow with `dry_run` set to `true`.
-3. Copy the payload from the job log.
-4. Paste the payload into the [Block Kit Builder](https://app.slack.com/block-kit-builder).
-
-The tracked post gives the message these fields: `id`, `handle`, `name`, `text`,
-`url`, `createdAt`, `likes`, `reposts`, `replies`, and `views`.
+A dry run draws the images into `./preview` and posts nothing. A dry run does
+not write the state file, so a later run still posts the milestone.

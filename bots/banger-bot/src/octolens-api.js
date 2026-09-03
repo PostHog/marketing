@@ -54,6 +54,7 @@ export function toTrackedPost(mention) {
         id: mention.sourceId,
         handle: mention.author,
         name: mention.authorName || '',
+        avatar: mention.authorAvatar || null,
         text: mention.body || '',
         url: mention.url,
         createdAt: mention.timestamp,

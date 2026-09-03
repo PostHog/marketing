@@ -1,7 +1,8 @@
 name: Banger Bot
 
-# Banger Bot posts to #team-editorial when a tweet from the PostHog brand
+# Banger Bot posts to #team-editorial when a post on X from the PostHog brand
 # account, or from an affiliated employee account, passes a like milestone.
+# Each message carries an image of the post with a meme overlay for the tier.
 #
 # The account list and the milestones are in bots/banger-bot/config.json.
 # The bot code is in bots/banger-bot/. Read bots/banger-bot/README.md first.
@@ -12,10 +13,14 @@ name: Banger Bot
 #
 # SETUP:
 # 1. Add these repository secrets (Settings → Secrets and variables → Actions):
-#      - OCTOLENS_API_KEY               An Octolens API key with the read scope.
-#      - SLACK_WEBHOOK_TEAM_EDITORIAL   An incoming webhook for #team-editorial.
-# 2. Test it: Actions tab → "Banger Bot" → Run workflow → set dry_run to true.
-#    A dry run prints the Slack payload in the job log. It posts nothing.
+#      - OCTOLENS_API_KEY   An Octolens API key with the read scope.
+#      - SLACK_BOT_TOKEN    A Slack bot token with files:write and chat:write.
+#      - SLACK_CHANNEL_ID   The id of #team-editorial.
+# 2. Invite the Slack app to the channel, or the upload fails with
+#    not_in_channel.
+# 3. Test it: Actions tab → "Banger Bot" → Run workflow → set dry_run to true.
+#    A dry run draws the images and posts nothing. Download them from the
+#    "banger-bot-preview" artifact on the run.
 #
 # The bot keeps its state in the Actions cache. A cache miss is safe. The bot
 # then records the current like counts, and it posts nothing for that run.
@@ -29,7 +34,7 @@ on:
     workflow_dispatch:
         inputs:
             dry_run:
-                description: Print the Slack payload in the log instead of posting it
+                description: Draw the images and post nothing
                 type: boolean
                 default: false
 
@@ -40,6 +45,8 @@ concurrency:
 jobs:
     check-bangers:
         runs-on: ubuntu-latest
+        env:
+            BANGER_BOT_IMAGE_DIR: banger-bot-preview
         steps:
             - name: Check out the repository
               uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -49,8 +56,21 @@ jobs:
               with:
                   node-version: 22
 
+            - name: Set up Python
+              uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+              with:
+                  python-version: '3.12'
+
+            - name: Install Pillow
+              run: python3 -m pip install --quiet 'pillow==11.*'
+
             - name: Run the unit tests
               run: node --test bots/banger-bot/test/*.test.js
+
+            # Draws one image for each milestone. This catches a missing asset,
+            # a missing font, and a broken layout before the bot posts anything.
+            - name: Check the renderer
+              run: python3 bots/banger-bot/render/banger_image.py --samples "$RUNNER_TEMP/samples"
 
             # The state records the milestones that the bot announced before.
             # The key holds the run id, so every run writes a new cache entry.
@@ -66,8 +86,17 @@ jobs:
               run: node bots/banger-bot/src/index.js
               env:
                   OCTOLENS_API_KEY: ${{ secrets.OCTOLENS_API_KEY }}
-                  SLACK_WEBHOOK_TEAM_EDITORIAL: ${{ secrets.SLACK_WEBHOOK_TEAM_EDITORIAL }}
+                  SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+                  SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
                   DRY_RUN: ${{ inputs.dry_run }}
+
+            - name: Upload the dry run images
+              if: ${{ inputs.dry_run }}
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: banger-bot-preview
+                  path: banger-bot-preview
+                  if-no-files-found: ignore
 
             # Save the state even after a failure. The bot writes the file only
             # after it posts, so a saved file never holds an unsent milestone.

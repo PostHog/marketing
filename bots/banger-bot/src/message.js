@@ -1,13 +1,8 @@
-// Slack message for Banger Bot.
+// Slack message text for Banger Bot.
 //
-// PLACEHOLDER. The editorial team designs the final message next.
-//
-// This file is the only place that decides how the message looks. Change this
-// file to change the message. Do not put message text in the other files.
-//
-// To try a new design, run the workflow with the dry_run input set to true. The
-// job log then prints the Block Kit payload, and the bot posts nothing. Paste
-// the payload into https://app.slack.com/block-kit-builder to see it.
+// The image carries the design. This file writes the short line above it.
+// Change this file to change the wording. The picture itself is drawn in
+// render/banger_image.py.
 
 /**
  * Returns the public URL of a post.
@@ -23,30 +18,26 @@ export function postUrl(post) {
 }
 
 /**
- * Builds the Slack payload for one milestone.
+ * Writes the comment that sits above the image.
  *
  * @param {object} options
- * @param {object} options.post The tracked post. It holds id, handle, name,
- *   text, url, createdAt, likes, reposts, replies, and views.
+ * @param {object} options.post The tracked post.
  * @param {number} options.milestone The milestone that the post passed.
- * @returns {object} A Slack incoming webhook payload.
+ * @returns {string}
  */
-export function renderBangerMessage({ post, milestone }) {
-    const url = postUrl(post)
+export function renderBangerComment({ post, milestone }) {
     const author = post.name ? `${post.name} (@${post.handle})` : `@${post.handle}`
-    const likes = milestone.toLocaleString('en-US')
-    const fallback = `${author} passed ${likes} likes: ${url}`
+    return `${author} passed ${milestone.toLocaleString('en-US')} likes. <${postUrl(post)}|View the post on X>`
+}
 
-    return {
-        text: fallback,
-        blocks: [
-            {
-                type: 'section',
-                text: {
-                    type: 'mrkdwn',
-                    text: `*${likes} likes* for ${author}\n<${url}|View the post on X>`,
-                },
-            },
-        ],
-    }
+/**
+ * Writes the file title that Slack shows on the image.
+ *
+ * @param {object} options
+ * @param {object} options.post The tracked post.
+ * @param {number} options.milestone The milestone that the post passed.
+ * @returns {string}
+ */
+export function bangerTitle({ post, milestone }) {
+    return `@${post.handle} at ${milestone.toLocaleString('en-US')} likes`
 }

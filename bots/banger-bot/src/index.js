@@ -20,11 +20,12 @@ import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { renderPostImage } from './image.js'
 import { highestOf, newlyCrossedThresholds } from './milestones.js'
-import { renderBangerMessage } from './message.js'
+import { bangerTitle, renderBangerComment } from './message.js'
 import { listPostsByAuthor, RateLimitError, toTrackedPost } from './octolens-api.js'
 import { loadState, prunePosts, saveState } from './state.js'
-import { postToSlack } from './slack.js'
+import { postImageToSlack } from './slack.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const DEFAULT_CONFIG = resolve(HERE, '..', 'config.json')
@@ -74,16 +75,20 @@ function logCoverage(posts, accounts, windowHours, now) {
 
 async function main() {
     const apiKey = process.env.OCTOLENS_API_KEY
-    const webhookUrl = process.env.SLACK_WEBHOOK_TEAM_EDITORIAL
+    const slackToken = process.env.SLACK_BOT_TOKEN
+    const channelId = process.env.SLACK_CHANNEL_ID
     const dryRun = process.env.DRY_RUN === 'true'
     const configPath = process.env.BANGER_BOT_CONFIG || DEFAULT_CONFIG
     const statePath = process.env.BANGER_BOT_STATE || DEFAULT_STATE
+    const imageDir = process.env.BANGER_BOT_IMAGE_DIR
 
     if (!apiKey) {
         throw new Error('OCTOLENS_API_KEY is not set.')
     }
-    if (!webhookUrl && !dryRun) {
-        throw new Error('SLACK_WEBHOOK_TEAM_EDITORIAL is not set. Set DRY_RUN to true to run without Slack.')
+    if (!dryRun && !(slackToken && channelId)) {
+        throw new Error(
+            'SLACK_BOT_TOKEN and SLACK_CHANNEL_ID must both be set. Set DRY_RUN to true to run without Slack.'
+        )
     }
 
     const config = JSON.parse(await readFile(configPath, 'utf8'))
@@ -162,21 +167,29 @@ async function main() {
             continue
         }
 
-        const payload = renderBangerMessage({ post, milestone })
-        if (dryRun) {
-            log.info(`Dry run. Payload for @${post.handle} at ${milestone} likes:`)
-            log.info(JSON.stringify(payload, null, 2))
-            continue
-        }
-
         try {
-            await postToSlack(webhookUrl, payload)
+            const imagePath = await renderPostImage({ post, milestone, directory: imageDir })
+            const comment = renderBangerComment({ post, milestone })
+
+            if (dryRun) {
+                log.info(`Dry run. @${post.handle} at ${milestone} likes: ${imagePath}`)
+                log.info(`Comment: ${comment}`)
+                continue
+            }
+
+            await postImageToSlack({
+                token: slackToken,
+                channelId,
+                imagePath,
+                comment,
+                title: bangerTitle({ post, milestone }),
+            })
             posted += 1
             log.info(`Posted @${post.handle} ${post.id} at ${milestone} likes.`)
         } catch (error) {
             // Keep the milestone unannounced, so the next run tries again.
             post.announced = post.announced.filter((value) => !crossed.includes(value))
-            log.warn(`Slack post failed for ${post.id}: ${error.message}`)
+            log.warn(`Could not post ${post.id}: ${error.message}`)
         }
     }
 

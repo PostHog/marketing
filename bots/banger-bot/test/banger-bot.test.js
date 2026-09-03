@@ -36,6 +36,7 @@ test('an Octolens mention becomes a tracked post', () => {
         body: 'we shipped a thing',
         author: 'posthog',
         authorName: 'PostHog',
+        authorAvatar: 'https://example.test/avatar.png',
         timestamp: '2026-09-03T09:00:00Z',
         engagementMetrics: { likes: 412, reposts: 12, views: 90_000 },
         engagementObservedAt: '2026-09-03T11:00:00Z',
@@ -43,6 +44,7 @@ test('an Octolens mention becomes a tracked post', () => {
 
     assert.equal(post.id, '1930000000000000000')
     assert.equal(post.handle, 'posthog')
+    assert.equal(post.avatar, 'https://example.test/avatar.png')
     assert.equal(post.likes, 412)
     assert.equal(post.reposts, 12)
     assert.equal(post.views, 90_000)
