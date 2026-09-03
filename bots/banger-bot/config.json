@@ -1,0 +1,20 @@
+{
+    "thresholds": [250, 500, 1000, 3000],
+    "trackWindowHours": 96,
+    "maxNewTweetsPerRun": 100,
+    "maxQueryLength": 480,
+    "accounts": [
+        "posthog",
+        "andyvan",
+        "pauldambra",
+        "minchev",
+        "britt_joiner",
+        "IanVanagas",
+        "adamleithp",
+        "jinayoon_",
+        "RafaAudibert",
+        "CoastalFuturist",
+        "yo_puaaa",
+        "AdletSmykov"
+    ]
+}

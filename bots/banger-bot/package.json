@@ -1,0 +1,10 @@
+{
+    "name": "banger-bot",
+    "private": true,
+    "type": "module",
+    "description": "Posts to Slack when a PostHog tweet passes a like milestone.",
+    "scripts": {
+        "start": "node src/index.js",
+        "test": "node --test test/*.test.js"
+    }
+}
