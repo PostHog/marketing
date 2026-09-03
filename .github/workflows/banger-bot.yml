@@ -14,8 +14,9 @@ name: Banger Bot
 # SETUP:
 # 1. Add these repository secrets (Settings → Secrets and variables → Actions):
 #      - OCTOLENS_API_KEY   An Octolens API key with the read scope.
-#      - SLACK_BOT_TOKEN    A Slack bot token with files:write and chat:write.
-#      - SLACK_CHANNEL_ID   The id of #team-editorial.
+#      - BANGER_BOT_SLACK_TOKEN       A Slack bot token with files:write and
+#                                     chat:write.
+#      - BANGER_BOT_SLACK_CHANNEL_ID  The id of #team-editorial.
 #      - ANTHROPIC_API_KEY  Runs the gut check. Without it the bot screens a
 #                           post against the phrase list only.
 # 2. Invite the Slack app to the channel, or the upload fails with
@@ -92,8 +93,8 @@ jobs:
               run: node bots/banger-bot/src/index.js
               env:
                   OCTOLENS_API_KEY: ${{ secrets.OCTOLENS_API_KEY }}
-                  SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-                  SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+                  BANGER_BOT_SLACK_TOKEN: ${{ secrets.BANGER_BOT_SLACK_TOKEN }}
+                  BANGER_BOT_SLACK_CHANNEL_ID: ${{ secrets.BANGER_BOT_SLACK_CHANNEL_ID }}
                   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
                   DRY_RUN: ${{ inputs.dry_run }}
 

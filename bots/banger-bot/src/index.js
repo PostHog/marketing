@@ -76,8 +76,8 @@ function logCoverage(posts, accounts, windowHours, now) {
 
 async function main() {
     const apiKey = process.env.OCTOLENS_API_KEY
-    const slackToken = process.env.SLACK_BOT_TOKEN
-    const channelId = process.env.SLACK_CHANNEL_ID
+    const slackToken = process.env.BANGER_BOT_SLACK_TOKEN
+    const channelId = process.env.BANGER_BOT_SLACK_CHANNEL_ID
     const anthropicKey = process.env.ANTHROPIC_API_KEY
     const dryRun = process.env.DRY_RUN === 'true'
     const configPath = process.env.BANGER_BOT_CONFIG || DEFAULT_CONFIG
@@ -89,7 +89,8 @@ async function main() {
     }
     if (!dryRun && !(slackToken && channelId)) {
         throw new Error(
-            'SLACK_BOT_TOKEN and SLACK_CHANNEL_ID must both be set. Set DRY_RUN to true to run without Slack.'
+            'BANGER_BOT_SLACK_TOKEN and BANGER_BOT_SLACK_CHANNEL_ID must both be set. ' +
+                'Set DRY_RUN to true to run without Slack.'
         )
     }
 

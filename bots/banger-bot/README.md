@@ -158,12 +158,18 @@ day. Other PostHog automations share that limit.
 
 Add 4 repository secrets under **Settings → Secrets and variables → Actions**:
 
-| Secret              | Value                                              |
-| ------------------- | -------------------------------------------------- |
-| `OCTOLENS_API_KEY`  | An Octolens API key with the `read` scope.          |
-| `SLACK_BOT_TOKEN`   | A Slack bot token, `xoxb-...`.                      |
-| `SLACK_CHANNEL_ID`  | The id of `#team-editorial`.                        |
-| `ANTHROPIC_API_KEY` | Runs the judgment layer of the gut check.           |
+| Secret                        | Value                                     |
+| ----------------------------- | ----------------------------------------- |
+| `BANGER_BOT_SLACK_TOKEN`      | A Slack bot token, `xoxb-...`.             |
+| `BANGER_BOT_SLACK_CHANNEL_ID` | The id of `#team-editorial`.               |
+| `OCTOLENS_API_KEY`            | An Octolens API key with the `read` scope. |
+| `ANTHROPIC_API_KEY`           | Runs the judgment layer of the gut check.  |
+
+The 2 Slack secrets carry the `BANGER_BOT_` prefix, because each bot in this
+repository needs its own Slack app and its own channel. The Octolens and
+Anthropic keys have no prefix on purpose: they are one credential for each
+vendor account, and a second bot should reuse them rather than hold a copy.
+Rotating a shared key then happens one time.
 
 Create the Octolens key in **Octolens → Settings → API keys**.
 
@@ -177,7 +183,8 @@ scopes:
 2. Select **From a manifest**, then the workspace.
 3. Select **YAML**, and paste the manifest file.
 4. Select **Create**, then **Install to Workspace**.
-5. Copy the **Bot User OAuth Token** (`xoxb-...`) into `SLACK_BOT_TOKEN`.
+5. Copy the **Bot User OAuth Token** (`xoxb-...`) into
+   `BANGER_BOT_SLACK_TOKEN`.
 6. Invite the app to the channel: `/invite @Banger Bot`. The upload fails with
    `not_in_channel` if you skip this step.
 

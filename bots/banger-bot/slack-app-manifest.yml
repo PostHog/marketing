@@ -8,7 +8,8 @@
 # 2. Select "From a manifest", then the workspace.
 # 3. Select YAML, and paste this file.
 # 4. Select "Create", then "Install to Workspace".
-# 5. Copy the "Bot User OAuth Token" (xoxb-...) into the SLACK_BOT_TOKEN secret.
+# 5. Copy the "Bot User OAuth Token" (xoxb-...) into the BANGER_BOT_SLACK_TOKEN
+#    secret.
 # 6. Invite the app to #team-editorial with: /invite @Banger Bot
 #    The upload fails with not_in_channel if you skip this step.
 #
