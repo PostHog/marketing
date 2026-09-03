@@ -1,8 +1,8 @@
 {
     "thresholds": [250, 500, 1000, 3000],
     "trackWindowHours": 96,
-    "maxNewTweetsPerRun": 100,
-    "maxQueryLength": 480,
+    "maxPostsPerAccount": 50,
+    "source": "twitter",
     "accounts": [
         "posthog",
         "andyvan",

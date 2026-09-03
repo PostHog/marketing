@@ -3,13 +3,17 @@
 // Banger Bot.
 //
 // The bot watches the X accounts in config.json. It posts to #team-editorial
-// when a tweet passes a like milestone. Read the README for the setup steps.
+// when a post passes a like milestone. Read the README for the setup steps.
+//
+// The bot reads the engagement counters from Octolens, not from the X API.
+// Octolens collects by keyword, so it does not hold every post from these
+// accounts. Each run logs a coverage line, so the gap stays visible.
 //
 // One run does this:
-//   1. Removes tweets that are outside the tracking window.
-//   2. Searches for tweets that the accounts posted after the last run.
-//   3. Refreshes the like counts of the tweets that it already tracks.
-//   4. Posts one Slack message for each tweet that passed a new milestone.
+//   1. Reads the recent posts of each account from Octolens.
+//   2. Keeps the posts that are inside the tracking window.
+//   3. Posts one Slack message for each post that passed a new milestone.
+//   4. Logs the coverage and the age of the engagement data.
 //   5. Writes the state file.
 
 import { readFile } from 'node:fs/promises'
@@ -18,9 +22,9 @@ import { fileURLToPath } from 'node:url'
 
 import { highestOf, newlyCrossedThresholds } from './milestones.js'
 import { renderBangerMessage } from './message.js'
+import { listPostsByAuthor, RateLimitError, toTrackedPost } from './octolens-api.js'
+import { loadState, prunePosts, saveState } from './state.js'
 import { postToSlack } from './slack.js'
-import { loadState, newestId, pruneTweets, saveState } from './state.js'
-import { buildSearchQueries, lookupTweets, RateLimitError, searchRecentTweets } from './x-api.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const DEFAULT_CONFIG = resolve(HERE, '..', 'config.json')
@@ -32,38 +36,51 @@ const log = {
     error: (message) => console.log(`::error::${message}`),
 }
 
+const minutesSince = (timestamp, now) => Math.round((now - Date.parse(timestamp)) / 60_000)
+
 /**
- * Converts an X API tweet into the record that the state file holds.
+ * Reports how much of our own output Octolens actually holds.
  *
- * @param {object} tweet A tweet from the X API.
- * @param {Map<string, object>} users The authors from the same response.
- * @returns {object} The tracked tweet record.
+ * Octolens collects by keyword. A post that does not match a keyword never
+ * reaches the bot, and the bot cannot see that the post exists. These lines
+ * make the gap visible, so the team can judge whether Octolens is enough.
+ *
+ * @param {object[]} posts The posts inside the tracking window.
+ * @param {string[]} accounts The configured accounts.
+ * @param {number} windowHours Length of the tracking window in hours.
+ * @param {number} now Current time in milliseconds.
  */
-function toTrackedTweet(tweet, users) {
-    const author = users.get(tweet.author_id)
-    const metrics = tweet.public_metrics || {}
-    return {
-        id: tweet.id,
-        handle: author?.username || 'unknown',
-        name: author?.name || '',
-        text: tweet.text || '',
-        createdAt: tweet.created_at,
-        likes: metrics.like_count || 0,
-        reposts: metrics.retweet_count || 0,
-        replies: metrics.reply_count || 0,
-        announced: [],
+function logCoverage(posts, accounts, windowHours, now) {
+    const handles = new Set(posts.map((post) => post.handle.toLowerCase()))
+    log.info(
+        `Coverage: ${posts.length} post(s) inside the ${windowHours} hour window, ` +
+            `from ${handles.size} of ${accounts.length} account(s).`
+    )
+
+    const silent = accounts.filter((handle) => !handles.has(handle.toLowerCase()))
+    if (silent.length > 0) {
+        log.info(`No posts in the window from: ${silent.map((handle) => `@${handle}`).join(', ')}.`)
+    }
+
+    // Octolens does not document how often it refreshes the counters. This line
+    // shows whether the 2 hour schedule reads fresh numbers or repeats old ones.
+    const ages = posts.map((post) => post.observedAt).filter(Boolean).map((at) => minutesSince(at, now))
+    if (ages.length > 0) {
+        log.info(`Engagement observed between ${Math.min(...ages)} and ${Math.max(...ages)} minute(s) ago.`)
+    } else if (posts.length > 0) {
+        log.warn('Octolens returned no engagement timestamps. The like counts may be stale.')
     }
 }
 
 async function main() {
-    const token = process.env.X_BEARER_TOKEN
+    const apiKey = process.env.OCTOLENS_API_KEY
     const webhookUrl = process.env.SLACK_WEBHOOK_TEAM_EDITORIAL
     const dryRun = process.env.DRY_RUN === 'true'
     const configPath = process.env.BANGER_BOT_CONFIG || DEFAULT_CONFIG
     const statePath = process.env.BANGER_BOT_STATE || DEFAULT_STATE
 
-    if (!token) {
-        throw new Error('X_BEARER_TOKEN is not set.')
+    if (!apiKey) {
+        throw new Error('OCTOLENS_API_KEY is not set.')
     }
     if (!webhookUrl && !dryRun) {
         throw new Error('SLACK_WEBHOOK_TEAM_EDITORIAL is not set. Set DRY_RUN to true to run without Slack.')
@@ -72,103 +89,82 @@ async function main() {
     const config = JSON.parse(await readFile(configPath, 'utf8'))
     const state = await loadState(statePath)
     const now = Date.now()
+    const oldest = now - config.trackWindowHours * 3_600_000
 
-    // A run without previous state must not post old tweets to Slack. The bot
-    // records the current like counts, and it announces nothing.
-    const isFirstRun = state.lastSearchId === undefined
+    // A run without previous state must not post old milestones to Slack. The
+    // bot records the current like counts, and it announces nothing.
+    const isFirstRun = state.seeded !== true
     if (isFirstRun) {
         log.info('No previous state found. This run records the current like counts and posts nothing.')
     }
 
-    const pruned = pruneTweets(state, config.trackWindowHours, now)
-    if (pruned > 0) {
-        log.info(`Removed ${pruned} tweet(s) from outside the ${config.trackWindowHours} hour window.`)
-    }
+    // ── 1. Read the recent posts of each account ──────────────────────────
+    const current = []
+    const truncated = []
+    let failures = 0
 
-    // ── 1. Find new tweets ────────────────────────────────────────────────
-    const queries = buildSearchQueries(config.accounts, config.maxQueryLength)
-    const discovered = []
-    let searchFailed = false
-
-    for (const query of queries) {
+    for (const handle of config.accounts) {
         try {
-            const { tweets, users } = await searchRecentTweets({
-                query,
-                sinceId: state.lastSearchId,
-                maxResults: config.maxNewTweetsPerRun,
-                token,
+            const mentions = await listPostsByAuthor({
+                handle,
+                source: config.source,
+                limit: config.maxPostsPerAccount,
+                apiKey,
             })
-            for (const tweet of tweets) {
-                discovered.push(toTrackedTweet(tweet, users))
+            const posts = mentions.map(toTrackedPost).filter((post) => Date.parse(post.createdAt) >= oldest)
+            current.push(...posts)
+
+            // Octolens returns the newest posts first. A full page of posts that
+            // all sit inside the window means that the bot may miss older ones.
+            if (mentions.length >= config.maxPostsPerAccount && posts.length === mentions.length) {
+                truncated.push(handle)
             }
         } catch (error) {
-            // One failed query must not stop the run. The bot does not move
-            // lastSearchId, so the next run reads the same range again.
-            searchFailed = true
-            log.warn(`Search failed: ${error.message}`)
-        }
-    }
-    log.info(`Found ${discovered.length} new tweet(s).`)
-
-    for (const tweet of discovered) {
-        const known = state.tweets[tweet.id]
-        state.tweets[tweet.id] = known ? { ...known, ...tweet, announced: known.announced } : tweet
-    }
-
-    if (!searchFailed) {
-        const newest = newestId(discovered.map((tweet) => tweet.id))
-        if (newest) {
-            state.lastSearchId = newest
-        }
-    }
-
-    // ── 2. Refresh the tweets that the bot already tracks ─────────────────
-    const discoveredIds = new Set(discovered.map((tweet) => tweet.id))
-    const staleIds = Object.keys(state.tweets).filter((id) => !discoveredIds.has(id))
-
-    if (staleIds.length > 0) {
-        const refreshed = await lookupTweets(staleIds, token)
-        const seen = new Set()
-        for (const tweet of refreshed) {
-            const tracked = state.tweets[tweet.id]
-            if (!tracked) {
-                continue
+            if (error instanceof RateLimitError) {
+                throw error
             }
-            seen.add(tweet.id)
-            const metrics = tweet.public_metrics || {}
-            tracked.likes = metrics.like_count || 0
-            tracked.reposts = metrics.retweet_count || 0
-            tracked.replies = metrics.reply_count || 0
+            // One failed account must not stop the run.
+            failures += 1
+            log.warn(`Could not read @${handle}: ${error.message}`)
         }
-        // The X API omits a tweet that the author deleted or made private.
-        for (const id of staleIds) {
-            if (!seen.has(id)) {
-                delete state.tweets[id]
-            }
-        }
-        log.info(`Refreshed ${seen.size} tracked tweet(s).`)
     }
+
+    if (truncated.length > 0) {
+        log.warn(
+            `Reached the page limit for: ${truncated.map((handle) => `@${handle}`).join(', ')}. ` +
+                'Raise maxPostsPerAccount or lower trackWindowHours in config.json.'
+        )
+    }
+
+    // ── 2. Merge the posts into the state ─────────────────────────────────
+    for (const post of current) {
+        const known = state.posts[post.id]
+        state.posts[post.id] = known ? { ...known, ...post, announced: known.announced } : post
+    }
+    prunePosts(state, config.trackWindowHours, now)
+
+    logCoverage(current, config.accounts, config.trackWindowHours, now)
 
     // ── 3. Announce the new milestones ────────────────────────────────────
     let posted = 0
-    for (const tweet of Object.values(state.tweets)) {
-        const crossed = newlyCrossedThresholds(tweet.likes, config.thresholds, tweet.announced)
+    for (const post of Object.values(state.posts)) {
+        const crossed = newlyCrossedThresholds(post.likes, config.thresholds, post.announced)
         if (crossed.length === 0) {
             continue
         }
 
-        // Mark every new milestone, and announce the largest one. A tweet that
+        // Mark every new milestone, and announce the largest one. A post that
         // passes two thresholds between runs gets one message, not two.
-        tweet.announced = [...tweet.announced, ...crossed].sort((a, b) => a - b)
+        post.announced = [...post.announced, ...crossed].sort((a, b) => a - b)
         const milestone = highestOf(crossed)
 
         if (isFirstRun) {
             continue
         }
 
-        const payload = renderBangerMessage({ tweet, milestone })
+        const payload = renderBangerMessage({ post, milestone })
         if (dryRun) {
-            log.info(`Dry run. Payload for @${tweet.handle} at ${milestone} likes:`)
+            log.info(`Dry run. Payload for @${post.handle} at ${milestone} likes:`)
             log.info(JSON.stringify(payload, null, 2))
             continue
         }
@@ -176,15 +172,18 @@ async function main() {
         try {
             await postToSlack(webhookUrl, payload)
             posted += 1
-            log.info(`Posted @${tweet.handle} ${tweet.id} at ${milestone} likes.`)
+            log.info(`Posted @${post.handle} ${post.id} at ${milestone} likes.`)
         } catch (error) {
             // Keep the milestone unannounced, so the next run tries again.
-            tweet.announced = tweet.announced.filter((value) => !crossed.includes(value))
-            log.warn(`Slack post failed for ${tweet.id}: ${error.message}`)
+            post.announced = post.announced.filter((value) => !crossed.includes(value))
+            log.warn(`Slack post failed for ${post.id}: ${error.message}`)
         }
     }
 
-    log.info(`Tracking ${Object.keys(state.tweets).length} tweet(s). Posted ${posted} message(s).`)
+    log.info(`Tracking ${Object.keys(state.posts).length} post(s). Posted ${posted} message(s).`)
+    if (failures > 0) {
+        log.warn(`${failures} account(s) could not be read.`)
+    }
 
     // A dry run must not record milestones. If it did, the next real run would
     // skip them, and the message would never reach Slack.
@@ -192,12 +191,14 @@ async function main() {
         log.info('Dry run. The bot did not write the state file.')
         return
     }
+
+    state.seeded = true
     await saveState(statePath, state)
 }
 
 main().catch((error) => {
     if (error instanceof RateLimitError) {
-        // A rate limit is temporary. The next run reads the same range again.
+        // A rate limit is temporary. The next run reads the same accounts again.
         log.warn(error.message)
         process.exit(0)
     }

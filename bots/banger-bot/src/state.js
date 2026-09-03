@@ -1,19 +1,19 @@
 // State for Banger Bot.
 //
-// The bot must announce each milestone one time only. It keeps the tweets that
+// The bot must announce each milestone one time only. It keeps the posts that
 // it watches, and the milestones that it announced, in a small JSON file.
 //
 // GitHub Actions holds this file in the Actions cache between runs. A cache
 // miss is safe. When the bot finds no previous state, it records the current
-// like counts and it announces nothing. See seedTweet in index.js.
+// like counts and it announces nothing. See the seed step in index.js.
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
-export const STATE_VERSION = 1
+export const STATE_VERSION = 2
 
 export function emptyState() {
-    return { version: STATE_VERSION, lastSearchId: undefined, tweets: {} }
+    return { version: STATE_VERSION, seeded: false, posts: {} }
 }
 
 /**
@@ -42,7 +42,7 @@ export async function loadState(path) {
         if (state.version !== STATE_VERSION) {
             return emptyState()
         }
-        state.tweets = state.tweets || {}
+        state.posts = state.posts || {}
         return state
     } catch {
         return emptyState()
@@ -55,44 +55,25 @@ export async function saveState(path, state) {
 }
 
 /**
- * Removes tweets that are older than the tracking window.
+ * Removes posts that are older than the tracking window.
  *
- * Engagement on a tweet is almost flat after a few days. The bot stops watching
- * old tweets to keep the API cost per run low.
+ * Engagement on a post is almost flat after a few days. The bot stops watching
+ * an old post to keep the request count per run low.
  *
  * @param {object} state The state.
  * @param {number} windowHours Length of the tracking window in hours.
  * @param {number} now Current time in milliseconds.
- * @returns {number} The count of removed tweets.
+ * @returns {number} The count of removed posts.
  */
-export function pruneTweets(state, windowHours, now = Date.now()) {
+export function prunePosts(state, windowHours, now = Date.now()) {
     const oldest = now - windowHours * 3_600_000
     let removed = 0
-    for (const [id, tweet] of Object.entries(state.tweets)) {
-        const createdAt = Date.parse(tweet.createdAt)
+    for (const [id, post] of Object.entries(state.posts)) {
+        const createdAt = Date.parse(post.createdAt)
         if (Number.isNaN(createdAt) || createdAt < oldest) {
-            delete state.tweets[id]
+            delete state.posts[id]
             removed += 1
         }
     }
     return removed
-}
-
-/**
- * Returns the largest tweet id.
- *
- * Tweet ids are numbers that are too large for the Number type. The function
- * compares them as BigInt values.
- *
- * @param {string[]} ids Tweet ids.
- * @returns {string|undefined} The largest id, or undefined for an empty list.
- */
-export function newestId(ids) {
-    let best
-    for (const id of ids) {
-        if (best === undefined || BigInt(id) > BigInt(best)) {
-            best = id
-        }
-    }
-    return best
 }

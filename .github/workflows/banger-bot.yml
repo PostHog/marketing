@@ -6,13 +6,15 @@ name: Banger Bot
 # The account list and the milestones are in bots/banger-bot/config.json.
 # The bot code is in bots/banger-bot/. Read bots/banger-bot/README.md first.
 #
+# The bot reads the like counts from Octolens, which PostHog already pays for.
+# It needs no X API subscription. Octolens collects by keyword, so it does not
+# hold every post from these accounts. Read the coverage section of the README.
+#
 # SETUP:
 # 1. Add these repository secrets (Settings → Secrets and variables → Actions):
-#      - X_BEARER_TOKEN                 A bearer token for the X API v2.
+#      - OCTOLENS_API_KEY               An Octolens API key with the read scope.
 #      - SLACK_WEBHOOK_TEAM_EDITORIAL   An incoming webhook for #team-editorial.
-# 2. The X API charges for reads. Check the quota notes in the README before you
-#    make the schedule below more frequent.
-# 3. Test it: Actions tab → "Banger Bot" → Run workflow → set dry_run to true.
+# 2. Test it: Actions tab → "Banger Bot" → Run workflow → set dry_run to true.
 #    A dry run prints the Slack payload in the job log. It posts nothing.
 #
 # The bot keeps its state in the Actions cache. A cache miss is safe. The bot
@@ -63,7 +65,7 @@ jobs:
             - name: Check for bangers
               run: node bots/banger-bot/src/index.js
               env:
-                  X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+                  OCTOLENS_API_KEY: ${{ secrets.OCTOLENS_API_KEY }}
                   SLACK_WEBHOOK_TEAM_EDITORIAL: ${{ secrets.SLACK_WEBHOOK_TEAM_EDITORIAL }}
                   DRY_RUN: ${{ inputs.dry_run }}
 

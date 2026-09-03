@@ -10,29 +10,32 @@
 // the payload into https://app.slack.com/block-kit-builder to see it.
 
 /**
- * Returns the public URL of a tweet.
+ * Returns the public URL of a post.
  *
- * @param {string} handle The author handle, without the "@" character.
- * @param {string} tweetId The tweet id.
+ * Octolens gives a canonical URL for each post. This function builds the URL
+ * for the rare record that has none.
+ *
+ * @param {object} post The tracked post.
  * @returns {string}
  */
-export function tweetUrl(handle, tweetId) {
-    return `https://x.com/${handle}/status/${tweetId}`
+export function postUrl(post) {
+    return post.url || `https://x.com/${post.handle}/status/${post.id}`
 }
 
 /**
  * Builds the Slack payload for one milestone.
  *
  * @param {object} options
- * @param {object} options.tweet The tracked tweet. It holds handle, name,
- *   text, likes, reposts, replies, and createdAt.
- * @param {number} options.milestone The milestone that the tweet passed.
+ * @param {object} options.post The tracked post. It holds id, handle, name,
+ *   text, url, createdAt, likes, reposts, replies, and views.
+ * @param {number} options.milestone The milestone that the post passed.
  * @returns {object} A Slack incoming webhook payload.
  */
-export function renderBangerMessage({ tweet, milestone }) {
-    const url = tweetUrl(tweet.handle, tweet.id)
-    const author = tweet.name ? `${tweet.name} (@${tweet.handle})` : `@${tweet.handle}`
-    const fallback = `${author} passed ${milestone.toLocaleString('en-US')} likes: ${url}`
+export function renderBangerMessage({ post, milestone }) {
+    const url = postUrl(post)
+    const author = post.name ? `${post.name} (@${post.handle})` : `@${post.handle}`
+    const likes = milestone.toLocaleString('en-US')
+    const fallback = `${author} passed ${likes} likes: ${url}`
 
     return {
         text: fallback,
@@ -41,7 +44,7 @@ export function renderBangerMessage({ tweet, milestone }) {
                 type: 'section',
                 text: {
                     type: 'mrkdwn',
-                    text: `*${milestone.toLocaleString('en-US')} likes* for ${author}\n<${url}|View the post on X>`,
+                    text: `*${likes} likes* for ${author}\n<${url}|View the post on X>`,
                 },
             },
         ],
