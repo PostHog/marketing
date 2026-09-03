@@ -8,8 +8,16 @@ account list is in [`config.json`](./config.json).
 The milestones are 250, 500, 1,000, and 3,000 likes. The bot announces each
 milestone one time for each post.
 
-Each message carries an image of the post. The image gets a different meme
-overlay for each milestone.
+Each message reads:
+
+```
+🚨 BANGER ALERT 🚨: this post from @posthog just passed 3,000 likes
+```
+
+Below the text, the bot posts an image of the post. The image is only as tall
+as the post needs. The art for the milestone sits **on top of** the post and
+covers part of it. The overlap is the joke, so do not move the art clear of the
+text.
 
 ## The images
 

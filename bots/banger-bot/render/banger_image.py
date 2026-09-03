@@ -9,6 +9,10 @@ Input:
 
 The post object holds handle, name, text, likes, reposts, replies, and views.
 
+The image is as tall as the post needs, and no taller. The meme for the
+milestone sits on top of the post and covers part of it. The overlap is the
+joke, so do not move the art clear of the text.
+
 Run `python3 banger_image.py --samples <dir>` to draw one sample for each
 milestone. Use the samples to review a design change before you ship it.
 """
@@ -24,17 +28,20 @@ ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "assets"
 FONTS = ASSETS / "fonts"
 
-W, H = 1200, 820
-CARD_TOP, CARD_BOT = 124, 404
-BAND_TOP = CARD_BOT
+W = 1200
+MARGIN = 36
+PAD = 40
+AVATAR = 76
+LINE_H = 44
+MAX_LINES = 4
 ORANGE = (245, 78, 0)
 CREAM = (249, 245, 239)
 INK = (26, 26, 26)
 GREY = (110, 116, 122)
 BOMBA_RED = (227, 24, 24)
 
-# Each milestone gets its own foreground treatment. Add a milestone here and in
-# config.json together, or the new milestone draws a plain card.
+# Each milestone gets its own overlay. Add a milestone here and in config.json
+# together, or the new milestone draws a plain post with no art.
 TIERS = {
     250: "pointing",
     500: "pog",
@@ -68,7 +75,7 @@ def fit_box(text, path, maxw, maxh, lo=10, hi=600):
     return ImageFont.truetype(path, best)
 
 
-def wrap(draw, text, f, maxw, max_lines=3):
+def wrap(draw, text, f, maxw):
     lines = []
     for para in text.split("\n"):
         cur = ""
@@ -80,28 +87,23 @@ def wrap(draw, text, f, maxw, max_lines=3):
                 lines.append(cur)
                 cur = word
         lines.append(cur)
-    lines = [ln for ln in lines if ln][:max_lines]
-    if lines and len(lines) == max_lines:
+    lines = [ln for ln in lines if ln]
+    if len(lines) > MAX_LINES:
+        lines = lines[:MAX_LINES]
         while lines[-1] and draw.textlength(lines[-1] + " ...", font=f) > maxw:
             lines[-1] = lines[-1].rsplit(" ", 1)[0]
+        lines[-1] += " ..."
     return lines
 
 
-def art(name, height):
-    """Loads an asset, removes the transparent border, and scales it."""
+def art(name, height, tilt=0):
+    """Loads an asset, drops the transparent border, scales it, and tilts it."""
     img = Image.open(ASSETS / name).convert("RGBA")
     img = img.crop(img.getbbox())
-    return img.resize((max(1, round(img.width * height / img.height)), height), Image.LANCZOS)
-
-
-def cover(name, w, h):
-    """Scales an asset to fill a box, and crops the overflow from the center."""
-    img = Image.open(ASSETS / name).convert("RGBA")
-    img = img.crop(img.getbbox())
-    s = max(w / img.width, h / img.height)
-    img = img.resize((round(img.width * s), round(img.height * s)), Image.LANCZOS)
-    x, y = (img.width - w) // 2, (img.height - h) // 2
-    return img.crop((x, y, x + w, y + h))
+    img = img.resize((max(1, round(img.width * height / img.height)), height), Image.LANCZOS)
+    if tilt:
+        img = img.rotate(tilt, expand=True, resample=Image.BICUBIC)
+    return img
 
 
 def initials(name, handle):
@@ -133,77 +135,78 @@ def draw_avatar(base, post, box):
            font=font("LiberationSans-Bold.ttf", 30), fill="white", anchor="mm")
 
 
-def draw_card(base, post, milestone, stats_fill):
+def layout(post):
+    """Measures the post, so the image is only as tall as the post needs."""
+    body = font("LiberationSans-Regular.ttf", 32)
+    ruler = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    lines = wrap(ruler, post["text"], body, W - 2 * MARGIN - 2 * PAD)
+
+    text_top = MARGIN + PAD + AVATAR + 30
+    stats_top = text_top + len(lines) * LINE_H + 18
+    card_bottom = stats_top + 30 + PAD
+    return lines, body, text_top, stats_top, card_bottom, card_bottom + MARGIN
+
+
+def draw_post(base, post, lines, body, text_top, stats_top, card_bottom):
     d = ImageDraw.Draw(base)
+    d.rounded_rectangle((MARGIN, MARGIN, W - MARGIN, card_bottom), radius=24,
+                        fill=(255, 255, 255), outline=(226, 224, 220), width=2)
 
-    label = f"{milestone:,} LIKES"
-    bf = font("Impact.ttf", 46)
-    bw = d.textlength(label, font=bf)
-    d.rounded_rectangle((60, 38, 60 + bw + 48, 108), radius=14, fill=ORANGE)
-    d.text((84 + bw / 2, 73), label, font=bf, fill="white", anchor="mm")
+    left = MARGIN + PAD
+    draw_avatar(base, post, (left, MARGIN + PAD, left + AVATAR, MARGIN + PAD + AVATAR))
+    d.text((left + AVATAR + 24, MARGIN + PAD + 2), post["name"] or post["handle"],
+           font=font("LiberationSans-Bold.ttf", 32), fill=INK)
+    d.text((left + AVATAR + 24, MARGIN + PAD + 42), "@" + post["handle"],
+           font=font("LiberationSans-Regular.ttf", 26), fill=GREY)
 
-    stats = (f"{post['reposts']:,} reposts    {post['replies']:,} replies    "
-             f"{compact(post['views'])} views")
-    d.text((1140, 73), stats, font=font("LiberationSans-Bold.ttf", 24),
-           fill=stats_fill, anchor="rm")
+    y = text_top
+    for line in lines:
+        d.text((left, y), line, font=body, fill=INK)
+        y += LINE_H
 
-    d.rounded_rectangle((60, CARD_TOP, 1140, CARD_BOT), radius=22,
-                        fill=(255, 255, 255), outline=(228, 226, 222), width=2)
-    draw_avatar(base, post, (96, 156, 168, 228))
-    d.text((188, 162), post["name"] or post["handle"],
-           font=font("LiberationSans-Bold.ttf", 30), fill=INK)
-    d.text((188, 200), "@" + post["handle"],
-           font=font("LiberationSans-Regular.ttf", 25), fill=GREY)
-
-    body = font("LiberationSans-Regular.ttf", 31)
-    y = 258
-    for line in wrap(d, post["text"], body, 980):
-        d.text((96, y), line, font=body, fill=INK)
-        y += 42
+    stats = (f"{post['replies']:,} replies    {post['reposts']:,} reposts    "
+             f"{post['likes']:,} likes    {compact(post['views'])} views")
+    d.text((left, stats_top), stats, font=font("LiberationSans-Regular.ttf", 24), fill=GREY)
 
 
 def render(post, milestone, out):
     tier = TIERS.get(milestone)
+    lines, body, text_top, stats_top, card_bottom, H = layout(post)
 
     if tier == "bomba":
         bg = Image.open(ASSETS / "nuclear-blast.jpg").convert("RGB")
         s = max(W / bg.width, H / bg.height)
         bg = bg.resize((round(bg.width * s), round(bg.height * s)), Image.LANCZOS)
         x, y = (bg.width - W) // 2, (bg.height - H) // 2
-        base = ImageEnhance.Brightness(bg.crop((x, y, x + W, y + H))).enhance(.8).convert("RGBA")
+        base = ImageEnhance.Brightness(bg.crop((x, y, x + W, y + H))).enhance(.82).convert("RGBA")
     else:
         base = Image.new("RGBA", (W, H), CREAM + (255,))
 
-    draw_card(base, post, milestone, (255, 255, 255) if tier == "bomba" else GREY)
+    draw_post(base, post, lines, body, text_top, stats_top, card_bottom)
 
+    # The art sits on top of the post and runs off the edge of the frame.
     if tier == "pointing":
-        pair = art("soyjaks-pointing.png", H - BAND_TOP)
-        base.alpha_composite(pair, ((W - pair.width) // 2, BAND_TOP))
+        pair = art("soyjaks-pointing.png", round(H * 1.18), tilt=-5)
+        base.alpha_composite(pair, (W - pair.width + 96, H - pair.height + 78))
 
     elif tier == "pog":
-        # An oval mask keeps the mouth readable and drops the damaged corner of
-        # the source. Filling the whole band instead reads as an abstract blur.
-        mouth = art("pog-mouth.png", 404)
-        mask = Image.new("L", mouth.size, 0)
-        ImageDraw.Draw(mask).ellipse((0, 0, mouth.width, mouth.height), fill=255)
-        mouth.putalpha(mask.filter(ImageFilter.GaussianBlur(mouth.width * .045)))
-        base.alpha_composite(mouth, ((W - mouth.width) // 2, H - mouth.height - 6))
+        mouth = art("pog-mouth.png", round(H * 1.02), tilt=8)
+        base.alpha_composite(mouth, (round(W * 0.42), H - mouth.height + 70))
 
     elif tier == "shaq":
-        shaq = art("shaq-glowing.png", 404)
-        px, py = W - shaq.width - 96, H - shaq.height - 8
+        shaq = art("shaq-glowing.png", round(H * 1.35), tilt=-9)
+        px, py = W - shaq.width + 110, H - shaq.height + 66
         glow = Image.new("RGBA", base.size, (0, 0, 0, 0))
         ImageDraw.Draw(glow).ellipse(
-            (px - 60, py + shaq.height * .16, px + shaq.width + 60, py + shaq.height * .62),
-            fill=(255, 160, 20, 195))
+            (px, py + shaq.height * .18, px + shaq.width, py + shaq.height * .62),
+            fill=(255, 160, 20, 190))
         base.alpha_composite(glow.filter(ImageFilter.GaussianBlur(55)))
         base.alpha_composite(shaq, (px, py))
 
     elif tier == "bomba":
         d = ImageDraw.Draw(base)
-        top, bot = BAND_TOP + 16, H - 16
-        f = fit_box("BOMBA", str(FONTS / "Impact.ttf"), W - 28, bot - top - 24)
-        d.text((W // 2, (top + bot) // 2), "BOMBA", font=f, fill=BOMBA_RED,
+        f = fit_box("BOMBA", str(FONTS / "Impact.ttf"), W - 24, round(H * 0.74))
+        d.text((W // 2, H // 2 + 14), "BOMBA", font=f, fill=BOMBA_RED,
                stroke_width=10, stroke_fill="black", anchor="mm")
 
     Path(out).parent.mkdir(parents=True, exist_ok=True)
@@ -215,7 +218,6 @@ SAMPLE = {
     "handle": "posthog", "name": "PostHog",
     "text": ("we built a product analytics tool nobody asked for. "
              "100,000 companies later, here is every mistake we made."),
-    "reposts": 214, "replies": 63, "views": 402_000,
 }
 
 

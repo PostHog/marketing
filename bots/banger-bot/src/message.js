@@ -26,8 +26,8 @@ export function postUrl(post) {
  * @returns {string}
  */
 export function renderBangerComment({ post, milestone }) {
-    const author = post.name ? `${post.name} (@${post.handle})` : `@${post.handle}`
-    return `${author} passed ${milestone.toLocaleString('en-US')} likes. <${postUrl(post)}|View the post on X>`
+    const likes = milestone.toLocaleString('en-US')
+    return `🚨 BANGER ALERT 🚨: this post from @${post.handle} just passed ${likes} likes`
 }
 
 /**
