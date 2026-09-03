@@ -27,7 +27,7 @@ export function postUrl(post) {
  */
 export function renderBangerComment({ post, milestone }) {
     const likes = milestone.toLocaleString('en-US')
-    return `🚨 BANGER ALERT 🚨: this post from @${post.handle} just passed ${likes} likes`
+    return `🚨 BANGER ALERT 🚨: this post from @${post.handle} just passed ${likes} likes\n${postUrl(post)}`
 }
 
 /**

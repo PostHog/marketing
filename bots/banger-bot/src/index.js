@@ -20,6 +20,7 @@ import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { gutCheck } from './gutcheck.js'
 import { renderPostImage } from './image.js'
 import { highestOf, newlyCrossedThresholds } from './milestones.js'
 import { bangerTitle, renderBangerComment } from './message.js'
@@ -77,6 +78,7 @@ async function main() {
     const apiKey = process.env.OCTOLENS_API_KEY
     const slackToken = process.env.SLACK_BOT_TOKEN
     const channelId = process.env.SLACK_CHANNEL_ID
+    const anthropicKey = process.env.ANTHROPIC_API_KEY
     const dryRun = process.env.DRY_RUN === 'true'
     const configPath = process.env.BANGER_BOT_CONFIG || DEFAULT_CONFIG
     const statePath = process.env.BANGER_BOT_STATE || DEFAULT_STATE
@@ -151,10 +153,37 @@ async function main() {
     logCoverage(current, config.accounts, config.trackWindowHours, now)
 
     // ── 3. Announce the new milestones ────────────────────────────────────
+    if (!anthropicKey) {
+        log.warn('ANTHROPIC_API_KEY is not set. The gut check runs on the phrase list only.')
+    }
+
     let posted = 0
+    let held = 0
     for (const post of Object.values(state.posts)) {
         const crossed = newlyCrossedThresholds(post.likes, config.thresholds, post.announced)
         if (crossed.length === 0) {
+            continue
+        }
+
+        if (isFirstRun) {
+            post.announced = [...post.announced, ...crossed].sort((a, b) => a - b)
+            continue
+        }
+
+        // A post can pass a milestone and still be wrong to celebrate.
+        const check = await gutCheck({ post, phrases: config.blockedPhrases, apiKey: anthropicKey })
+        if (check.status === 'error') {
+            // An error is not permission. Nothing is marked, so the next run
+            // asks again.
+            log.warn(`No verdict for ${post.id}, so the bot held it back. ${check.reason}`)
+            continue
+        }
+        if (check.status === 'block') {
+            // Mark every milestone, so the bot never asks about this post again.
+            post.blocked = check.reason
+            post.announced = [...config.thresholds]
+            held += 1
+            log.warn(`Held back @${post.handle} ${post.id}. ${check.reason}`)
             continue
         }
 
@@ -162,10 +191,6 @@ async function main() {
         // passes two thresholds between runs gets one message, not two.
         post.announced = [...post.announced, ...crossed].sort((a, b) => a - b)
         const milestone = highestOf(crossed)
-
-        if (isFirstRun) {
-            continue
-        }
 
         try {
             const imagePath = await renderPostImage({ post, milestone, directory: imageDir })
@@ -193,7 +218,10 @@ async function main() {
         }
     }
 
-    log.info(`Tracking ${Object.keys(state.posts).length} post(s). Posted ${posted} message(s).`)
+    log.info(
+        `Tracking ${Object.keys(state.posts).length} post(s). ` +
+            `Posted ${posted} message(s). The gut check held back ${held} post(s).`
+    )
     if (failures > 0) {
         log.warn(`${failures} account(s) could not be read.`)
     }

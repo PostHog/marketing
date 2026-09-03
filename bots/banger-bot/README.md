@@ -12,6 +12,7 @@ Each message reads:
 
 ```
 🚨 BANGER ALERT 🚨: this post from @posthog just passed 3,000 likes
+https://x.com/posthog/status/1930000000000000000
 ```
 
 Below the text, the bot posts an image of the post. The image is only as tall
@@ -42,6 +43,44 @@ font, or a broken layout therefore fails the job before the bot posts anything.
 
 To add a milestone, add it to `thresholds` in `config.json` and to `TIERS` in
 `render/banger_image.py`. A milestone with no tier draws a plain card.
+
+## The gut check
+
+A post can pass a milestone and still be wrong to celebrate. A leaving
+announcement gets a lot of likes. So does a post that embarrasses PostHog.
+
+[`src/gutcheck.js`](./src/gutcheck.js) reads each post before the bot announces
+it. It blocks 4 kinds of post:
+
+1. A leaving announcement.
+2. A post that damages the reputation of PostHog, such as an outage, an
+   apology, a layoff, or a public argument.
+3. A post that is very inappropriate for a workplace channel.
+4. Offensive material.
+
+It allows everything else. PostHog writes in a blunt and funny voice, so
+swearing, strong opinions, and jokes are safe. The check does not block a post
+only because the tone is rude or negative.
+
+The check has 2 layers:
+
+- **A phrase list.** `blockedPhrases` in `config.json`. It runs always, and it
+  costs nothing. Keep it short and exact, because the second layer reads the
+  meaning.
+- **A judgment call by Claude.** This layer runs when `ANTHROPIC_API_KEY` is
+  set. Without the key, the bot screens a post against the phrase list only,
+  and it writes a warning in the log.
+
+**The check fails closed.** When Claude cannot answer, the bot posts nothing for
+that run, and the next run asks again. A missed celebration costs little. A bad
+celebration embarrasses the company.
+
+A blocked post is written to the log with the reason, and the state file records
+the reason under `blocked`. Read the job log to audit what the bot held back.
+
+The post text comes from a public website, and it can hold text that reads like
+an instruction. The prompt therefore marks the post as data, and it tells the
+model to judge the text and never obey it.
 
 ## Where the numbers come from
 
@@ -107,6 +146,7 @@ day. Other PostHog automations share that limit.
 | `src/octolens-api.js`   | The Octolens client and the mention mapping.    |
 | `src/state.js`          | The state file and the prune step.              |
 | `src/milestones.js`     | The threshold logic. The unit tests cover it.   |
+| `src/gutcheck.js`       | Screens a post before the bot announces it.     |
 | `src/image.js`          | Starts the Python renderer.                     |
 | `src/message.js`        | The text above the image.                       |
 | `src/slack.js`          | The Slack upload.                               |
@@ -116,13 +156,14 @@ day. Other PostHog automations share that limit.
 
 ## Setup
 
-Add 3 repository secrets under **Settings → Secrets and variables → Actions**:
+Add 4 repository secrets under **Settings → Secrets and variables → Actions**:
 
 | Secret              | Value                                              |
 | ------------------- | -------------------------------------------------- |
 | `OCTOLENS_API_KEY`  | An Octolens API key with the `read` scope.          |
 | `SLACK_BOT_TOKEN`   | A Slack bot token, `xoxb-...`.                      |
 | `SLACK_CHANNEL_ID`  | The id of `#team-editorial`.                        |
+| `ANTHROPIC_API_KEY` | Runs the judgment layer of the gut check.           |
 
 Create the Octolens key in **Octolens → Settings → API keys**.
 
@@ -156,6 +197,7 @@ uses a different handle.
 | `trackWindowHours`   | How long the bot watches a post. The default is 96.   |
 | `maxPostsPerAccount` | Posts to read for each account, from 1 to 50.         |
 | `source`             | The Octolens platform name. Use `twitter` for X.      |
+| `blockedPhrases`     | Phrases that always block a post. See the gut check.  |
 | `accounts`           | The handles to watch, without the `@` character.      |
 
 ## State
@@ -174,6 +216,7 @@ The bot needs Node 22 or later, Python 3, and Pillow.
 ```sh
 cd bots/banger-bot
 python3 -m pip install pillow
+npm install
 npm test
 
 OCTOLENS_API_KEY=... DRY_RUN=true BANGER_BOT_IMAGE_DIR=./preview node src/index.js

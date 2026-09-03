@@ -16,6 +16,8 @@ name: Banger Bot
 #      - OCTOLENS_API_KEY   An Octolens API key with the read scope.
 #      - SLACK_BOT_TOKEN    A Slack bot token with files:write and chat:write.
 #      - SLACK_CHANNEL_ID   The id of #team-editorial.
+#      - ANTHROPIC_API_KEY  Runs the gut check. Without it the bot screens a
+#                           post against the phrase list only.
 # 2. Invite the Slack app to the channel, or the upload fails with
 #    not_in_channel.
 # 3. Test it: Actions tab → "Banger Bot" → Run workflow → set dry_run to true.
@@ -64,6 +66,10 @@ jobs:
             - name: Install Pillow
               run: python3 -m pip install --quiet 'pillow==11.*'
 
+            - name: Install the Node dependencies
+              run: npm ci
+              working-directory: bots/banger-bot
+
             - name: Run the unit tests
               run: node --test bots/banger-bot/test/*.test.js
 
@@ -88,6 +94,7 @@ jobs:
                   OCTOLENS_API_KEY: ${{ secrets.OCTOLENS_API_KEY }}
                   SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
                   SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+                  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
                   DRY_RUN: ${{ inputs.dry_run }}
 
             - name: Upload the dry run images

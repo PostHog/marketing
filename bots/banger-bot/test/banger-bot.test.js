@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import { blockedPhrase, gutCheck } from '../src/gutcheck.js'
 import { highestOf, newlyCrossedThresholds } from '../src/milestones.js'
 import { toTrackedPost } from '../src/octolens-api.js'
 import { prunePosts } from '../src/state.js'
@@ -57,6 +58,25 @@ test('a mention without engagement metrics reads as zero likes', () => {
     const post = toTrackedPost({ sourceId: '1', author: 'posthog', timestamp: '2026-09-03T09:00:00Z' })
     assert.equal(post.likes, 0)
     assert.equal(post.observedAt, null)
+})
+
+const PHRASES = ['last day at posthog', 'leaving posthog']
+
+test('the phrase list catches a leaving announcement', () => {
+    const post = { text: 'Today is my Last Day At PostHog. Thanks for everything.' }
+    assert.equal(blockedPhrase(post, PHRASES), 'last day at posthog')
+})
+
+test('the phrase list passes a normal post', () => {
+    assert.equal(blockedPhrase({ text: 'we shipped a thing' }, PHRASES), null)
+})
+
+test('the gut check falls back to the phrase list without an API key', async () => {
+    const clean = await gutCheck({ post: { text: 'we shipped a thing' }, phrases: PHRASES })
+    assert.equal(clean.status, 'allow')
+
+    const leaving = await gutCheck({ post: { text: 'leaving PostHog today' }, phrases: PHRASES })
+    assert.equal(leaving.status, 'block')
 })
 
 test('pruning removes posts from outside the window', () => {
