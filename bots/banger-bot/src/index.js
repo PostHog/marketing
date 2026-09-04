@@ -137,6 +137,16 @@ async function main() {
         }
     }
 
+    // Every account failing is one problem, not many: the key is dead, or
+    // Octolens is down. Fail the job so the run goes red. A warning on its own
+    // leaves a green tick on a bot that read nothing, and nobody looks.
+    if (failures > 0 && failures === config.accounts.length) {
+        throw new Error(
+            `Could not read any of the ${failures} account(s). Check that OCTOLENS_API_KEY ` +
+                'is set, is valid, and has not passed its expiry date.'
+        )
+    }
+
     if (truncated.length > 0) {
         log.warn(
             `Reached the page limit for: ${truncated.map((handle) => `@${handle}`).join(', ')}. ` +

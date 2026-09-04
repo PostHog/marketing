@@ -190,7 +190,21 @@ Put the key in its own workspace with a spend limit if your Console role lets
 you make one. A Developer role often cannot, and the default workspace works
 fine. Ask an administrator for the spend limit afterwards.
 
-Create the Octolens key in **Octolens → Settings → API keys**.
+Create the Octolens key in **Octolens → Settings → API**. Give it the `read`
+scope. The bot only reads mentions, so `write` and `admin` grant more than it
+needs.
+
+**Set the expiry as far out as the dropdown allows.** Octolens asks for an
+expiry date when you create a key, and the bot reads nothing once that date
+passes. A short expiry is a time bomb.
+
+Make a key for this repository rather than copying one from another repository.
+GitHub never reveals a secret again after you save it, so a key held elsewhere
+is not readable anyway, and a key of its own means you can revoke this bot
+without stopping the other Octolens integrations.
+
+A new key does not raise the quota. Octolens counts 500 requests each hour for
+the whole organization, across every key.
 
 ### Create the Slack app
 
