@@ -74,15 +74,66 @@ function logCoverage(posts, accounts, windowHours, now) {
     }
 }
 
+/**
+ * Posts one throwaway message to Slack, and nothing else.
+ *
+ * The bot stays silent until a post passes a milestone, so without this the
+ * first real message would also be the first test of the Slack path. A broken
+ * token, a wrong channel id, a missing scope, or an app that was never invited
+ * to the channel would then sit in a warning for days.
+ *
+ * @param {string} token A Slack bot token.
+ * @param {string} channelId The target channel id.
+ * @param {string} [directory] Where to write the image.
+ */
+async function postTestMessage(token, channelId, directory) {
+    // The 250 tier leaves the words readable. A reader in the channel can then
+    // see that this is a test from the picture alone. The heavier tiers are
+    // already drawn on every run by the renderer check, so nothing is lost.
+    const post = {
+        id: 'test',
+        handle: 'posthog',
+        name: 'PostHog',
+        avatar: null,
+        text: 'This is a test message from Banger Bot. No post passed a milestone. Carry on.',
+        likes: 268,
+        reposts: 41,
+        replies: 12,
+        views: 38_400,
+    }
+
+    const imagePath = await renderPostImage({ post, milestone: 250, directory })
+    await postImageToSlack({
+        token,
+        channelId,
+        imagePath,
+        comment: '🧪 Banger Bot test message. The setup works. Nothing has passed a milestone.',
+        title: 'Banger Bot test message',
+    })
+    log.info('Posted a test message to Slack. The token, the channel, and the upload all work.')
+}
+
 async function main() {
     const apiKey = process.env.OCTOLENS_API_KEY
     const slackToken = process.env.BANGER_BOT_SLACK_TOKEN
     const channelId = process.env.BANGER_BOT_SLACK_CHANNEL_ID
     const anthropicKey = process.env.BANGER_BOT_ANTHROPIC_API_KEY
     const dryRun = process.env.DRY_RUN === 'true'
+    const testPost = process.env.TEST_POST === 'true'
     const configPath = process.env.BANGER_BOT_CONFIG || DEFAULT_CONFIG
     const statePath = process.env.BANGER_BOT_STATE || DEFAULT_STATE
     const imageDir = process.env.BANGER_BOT_IMAGE_DIR
+
+    // A test post proves the Slack path on its own. It reads no posts, it runs
+    // no gut check, and it writes no state, so a failure here can only be the
+    // token, the channel id, the scopes, or the missing channel invite.
+    if (testPost) {
+        if (!(slackToken && channelId)) {
+            throw new Error('A test post needs BANGER_BOT_SLACK_TOKEN and BANGER_BOT_SLACK_CHANNEL_ID.')
+        }
+        await postTestMessage(slackToken, channelId, imageDir)
+        return
+    }
 
     if (!apiKey) {
         throw new Error('OCTOLENS_API_KEY is not set.')

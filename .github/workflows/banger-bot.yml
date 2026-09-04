@@ -24,9 +24,13 @@ name: Banger Bot
 #                                     shared budget.
 # 2. Invite the Slack app to the channel, or the upload fails with
 #    not_in_channel.
-# 3. Test it: Actions tab → "Banger Bot" → Run workflow → set dry_run to true.
-#    A dry run draws the images and posts nothing. Download them from the
-#    "banger-bot-preview" artifact on the run.
+# 3. Test Slack: Actions tab → "Banger Bot" → Run workflow → set test_post to
+#    true. The bot posts one throwaway message to the channel, then stops. Do
+#    this once after setup, because the bot is otherwise silent until a post
+#    passes a milestone.
+# 4. Test the rest: the same menu, with dry_run set to true. A dry run draws the
+#    images and posts nothing. Download them from the "banger-bot-preview"
+#    artifact on the run.
 #
 # The bot keeps its state in the Actions cache. A cache miss is safe. The bot
 # then records the current like counts, and it posts nothing for that run.
@@ -41,6 +45,10 @@ on:
         inputs:
             dry_run:
                 description: Draw the images and post nothing
+                type: boolean
+                default: false
+            test_post:
+                description: Post one test message to Slack, then stop
                 type: boolean
                 default: false
 
@@ -100,6 +108,7 @@ jobs:
                   BANGER_BOT_SLACK_CHANNEL_ID: ${{ secrets.BANGER_BOT_SLACK_CHANNEL_ID }}
                   BANGER_BOT_ANTHROPIC_API_KEY: ${{ secrets.BANGER_BOT_ANTHROPIC_API_KEY }}
                   DRY_RUN: ${{ inputs.dry_run }}
+                  TEST_POST: ${{ inputs.test_post }}
 
             - name: Upload the dry run images
               if: ${{ inputs.dry_run }}
