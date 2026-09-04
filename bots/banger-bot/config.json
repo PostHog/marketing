@@ -1,0 +1,21 @@
+{
+    "thresholds": [250, 500, 1000, 3000],
+    "trackWindowHours": 96,
+    "maxPostsPerAccount": 50,
+    "source": "twitter",
+    "blockedPhrases": ["last day at posthog", "leaving posthog", "my last day", "departing posthog"],
+    "accounts": [
+        "posthog",
+        "andyvan",
+        "pauldambra",
+        "minchev",
+        "britt_joiner",
+        "IanVanagas",
+        "adamleithp",
+        "jinayoon_",
+        "RafaAudibert",
+        "CoastalFuturist",
+        "yo_puaaa",
+        "AdletSmykov"
+    ]
+}

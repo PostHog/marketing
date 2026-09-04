@@ -1,0 +1,14 @@
+{
+    "name": "banger-bot",
+    "private": true,
+    "type": "module",
+    "description": "Posts to Slack when a PostHog tweet passes a like milestone.",
+    "scripts": {
+        "start": "node src/index.js",
+        "test": "node --test test/*.test.js"
+    },
+    "dependencies": {
+        "@anthropic-ai/sdk": "^0.123.0",
+        "zod": "^4.5.4"
+    }
+}

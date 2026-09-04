@@ -1,0 +1,53 @@
+# Slack app manifest for Banger Bot.
+#
+# This file creates the Slack app with the correct scopes, so nobody has to set
+# them by hand. A person with workspace permissions must do the creation step,
+# because Slack does not let an automated job create an app.
+#
+# 1. Go to https://api.slack.com/apps and select "Create New App".
+# 2. Select "From a manifest", then the workspace.
+# 3. Select YAML, and paste this file.
+# 4. Select "Create", then "Install to Workspace".
+# 5. Copy the "Bot User OAuth Token" (xoxb-...) into the BANGER_BOT_SLACK_TOKEN
+#    secret.
+# 6. Invite the app to #team-editorial with: /invite @Banger Bot
+#    The upload fails with not_in_channel if you skip this step.
+#
+# The app icon is NOT in this file. A Slack manifest cannot carry an image.
+# Upload it after step 4, under Basic Information → Display Information → App
+# icon. Use a square PNG, 512x512 or larger.
+
+display_information:
+    name: Banger Bot
+    description: Shouts when a PostHog post on X passes a like milestone.
+    background_color: '#f54e00'
+    long_description: >-
+        Banger Bot watches the PostHog brand account and the affiliated employee
+        accounts on X. When one of their posts passes 250, 500, 1,000, or 3,000
+        likes, the bot posts an image of that post into the editorial channel,
+        with a different meme overlay for each milestone. It reads the like
+        counts from Octolens, and it announces each milestone one time for each
+        post. A gut check reads every post first, so the bot does not celebrate
+        a leaving announcement, a post that damages the reputation of PostHog,
+        or offensive material. The bot code lives in the PostHog marketing
+        repository, and a GitHub Actions workflow runs it every 2 hours.
+
+features:
+    bot_user:
+        display_name: Banger Bot
+        always_online: false
+
+oauth_config:
+    scopes:
+        bot:
+            # Posts the message that carries the image.
+            - chat:write
+            # Uploads the image itself.
+            - files:write
+
+settings:
+    org_deploy_enabled: false
+    socket_mode_enabled: false
+    token_rotation_enabled: false
+    interactivity:
+        is_enabled: false
