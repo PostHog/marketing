@@ -24,10 +24,10 @@ text.
 
 | Milestone | Overlay                                                    |
 | --------- | ---------------------------------------------------------- |
-| 250       | The pointing soyjaks, in the foreground.                    |
-| 500       | The pog mouth, centered in the foreground.                  |
-| 1,000     | The glowing-eyes Shaq cutout, with a glow behind it.         |
-| 3,000     | A nuclear blast, and "BOMBA" in red Impact across the width. |
+| 250       | Pointing soyjaks                |
+| 500       | Pog mouth, centered in the foreground.                  |
+| 1,000     | *Mystery visual*        |
+| 3,000     | *Mystery visual* |
 
 [`render/banger_image.py`](./render/banger_image.py) draws every image. It is
 the only file that decides how an image looks.
@@ -190,7 +190,7 @@ day. Other PostHog automations share that limit.
 
 ## Setup
 
-Add 4 repository secrets under **Settings → Secrets and variables → Actions**:
+The bot needs 4 secrets:
 
 | Secret                         | Value                                      |
 | ------------------------------ | ------------------------------------------ |
@@ -198,6 +198,37 @@ Add 4 repository secrets under **Settings → Secrets and variables → Actions*
 | `BANGER_BOT_SLACK_CHANNEL_ID`  | The id of `#team-editorial`.                |
 | `BANGER_BOT_ANTHROPIC_API_KEY` | Runs the judgment layer of the gut check.   |
 | `OCTOLENS_API_KEY`             | An Octolens API key with the `read` scope.  |
+
+### Make them organization secrets, not repository secrets
+
+PostHog policy is to hold an Actions secret at the organization, scoped to the
+repositories that need it. Read
+[the handbook](https://posthog.com/handbook/engineering/security#github-1).
+
+A repository secret is easier to add and it works the same way, so it is the
+easy mistake. It also scatters credentials across repositories, and the Shai
+Hulud incident showed what that costs: a rotation has to find every copy, and
+the ones it misses break a pipeline quietly, weeks later.
+
+Add each one from **Organization settings → Secrets and variables → Actions →
+New organization secret**, and set **Repository access** to **Selected
+repositories**, holding `marketing` alone. The repository page has no button for
+this. It sends you to the organization page instead.
+
+`${{ secrets.NAME }}` reads an organization secret and a repository secret the
+same way, so the workflow needs no change.
+
+**Order matters when you move an existing secret.** Add the organization copy
+first, then delete the repository copy. A repository secret overrides an
+organization secret of the same name, so the bot keeps running on the repository
+copy until it goes, and then falls through. The reverse order leaves a gap where
+the bot has no credential at all.
+
+GitHub never shows a secret again after you save it, so moving one means typing
+the value in again from its original source. A Slack bot token stays readable
+under **OAuth & Permissions**, and a channel id stays readable in Slack. An
+Anthropic key does not. Replace a lost key and revoke the old one, rather than
+leaving a live credential that nothing uses and nobody watches.
 
 ### Why 3 secrets carry a prefix and 1 does not
 
