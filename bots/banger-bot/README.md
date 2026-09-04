@@ -94,6 +94,21 @@ It prints `ALLOW`, `BLOCK`, or `ERROR` with the reason. Feed it real posts,
 including the loud and rude ones that must pass. If a verdict is wrong, edit
 `SYSTEM` in `src/gutcheck.js` and run it again.
 
+These 5 posts show the calibration the prompt aims for. Run them again after any
+edit to `SYSTEM`, because a prompt that blocks the bottom 2 is too strict to
+use:
+
+| Post                                                       | Verdict |
+| ---------------------------------------------------------- | ------- |
+| `after 4 incredible years I'm moving on. joining Vercel`    | BLOCK   |
+| `we had a 3 hour ingestion outage today. we're sorry.`      | BLOCK   |
+| `posthog is not a serious company`                          | ALLOW   |
+| `every session replay tool except ours is dogshit. fight me`| ALLOW   |
+| `our onboarding is genuinely terrible and we know it`       | ALLOW   |
+
+The first one is the reason the phrase list is only a backstop. No phrase in
+`blockedPhrases` appears in it, and Claude blocked it on the meaning alone.
+
 A blocked post is written to the log with the reason, and the state file records
 the reason under `blocked`. Read the job log to audit what the bot held back.
 
