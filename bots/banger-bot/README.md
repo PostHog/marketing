@@ -24,10 +24,10 @@ text.
 
 | Milestone | Overlay                                                    |
 | --------- | ---------------------------------------------------------- |
-| 250       | The pointing soyjaks, in the foreground.                    |
-| 500       | The pog mouth, centered in the foreground.                  |
-| 1,000     | The glowing-eyes Shaq cutout, with a glow behind it.         |
-| 3,000     | A nuclear blast, and "BOMBA" in red Impact across the width. |
+| 250       | Pointing soyjaks                |
+| 500       | Pog mouth, centered in the foreground.                  |
+| 1,000     | *Mystery visual*        |
+| 3,000     | *Mystery visual* |
 
 [`render/banger_image.py`](./render/banger_image.py) draws every image. It is
 the only file that decides how an image looks.
