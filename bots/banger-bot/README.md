@@ -280,10 +280,26 @@ use.
    them from the `banger-bot-preview` artifact on the run.
 6. Read the coverage lines in the job log. They say how many of the accounts
    Octolens holds posts for.
+7. Run it once more with `test_post` set to `true`. The bot posts one throwaway
+   message to the channel, then stops. See below for why this step exists.
 
 The first live run records the current like counts and posts nothing. This is
 correct. It stops the bot from announcing every old post at once. A run after
 that one posts as normal.
+
+### Prove the Slack path with a test post
+
+The bot stays silent until a post passes a milestone, which can take days. The
+first real message would therefore also be the first test of the Slack path. A
+wrong channel id, a missing scope, or an app that was never invited to the
+channel would sit unnoticed in a warning until then.
+
+`test_post` closes that gap. It draws one image, posts it to the channel, and
+stops. It reads no posts from Octolens, it runs no gut check, and it writes no
+state, so a failure can only be Slack.
+
+A dry run cannot do this job. A dry run writes no state, so every dry run looks
+like a first run, and a first run posts nothing by design.
 
 ### Check the account handles
 
