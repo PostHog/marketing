@@ -75,6 +75,25 @@ The check has 2 layers:
 that run, and the next run asks again. A missed celebration costs little. A bad
 celebration embarrasses the company.
 
+### Calibrate it against real posts
+
+The phrase list does not need to name every bad case, because Claude reads the
+meaning of every post that the list did not already block. Do not grow the list
+to cover more ground. Grow the prompt in `src/gutcheck.js` instead, and keep the
+list short and exact.
+
+Read one post by hand to see what the judgment layer does with it:
+
+```sh
+cd bots/banger-bot
+npm install
+BANGER_BOT_ANTHROPIC_API_KEY=... node src/gutcheck.js "the text of the post"
+```
+
+It prints `ALLOW`, `BLOCK`, or `ERROR` with the reason. Feed it real posts,
+including the loud and rude ones that must pass. If a verdict is wrong, edit
+`SYSTEM` in `src/gutcheck.js` and run it again.
+
 A blocked post is written to the log with the reason, and the state file records
 the reason under `blocked`. Read the job log to audit what the bot held back.
 

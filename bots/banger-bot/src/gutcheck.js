@@ -9,9 +9,19 @@
 //   2. A judgment call by Claude. It runs when BANGER_BOT_ANTHROPIC_API_KEY
 //      is set.
 //
+// The phrase list is a backstop, not the filter. Claude reads the meaning of
+// every post that the phrase list did not already block, so the list does not
+// need to name every bad case. Keep the list short and exact.
+//
 // The check fails closed. When the phrase list matches, the bot never posts.
 // When Claude cannot answer, the bot posts nothing for that run and it tries
 // again on the next run.
+//
+// To read one post by hand, and to calibrate the prompt against real posts:
+//   BANGER_BOT_ANTHROPIC_API_KEY=... node src/gutcheck.js "the post text"
+
+import { readFile } from 'node:fs/promises'
+import { pathToFileURL } from 'node:url'
 
 import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
@@ -114,4 +124,38 @@ export async function gutCheck({ post, phrases, apiKey }) {
         // asks again.
         return { status: 'error', reason: `The gut check failed: ${error.message}` }
     }
+}
+
+/**
+ * Reads one post from the command line and prints the verdict.
+ *
+ * Use this to calibrate the prompt against real posts before you trust the bot,
+ * and to prove that the API key works.
+ */
+async function checkOnePost() {
+    const text = process.argv.slice(2).join(' ')
+    if (!text) {
+        console.error('Usage: node src/gutcheck.js "the text of the post"')
+        process.exit(2)
+    }
+
+    const apiKey = process.env.BANGER_BOT_ANTHROPIC_API_KEY
+    if (!apiKey) {
+        console.error('BANGER_BOT_ANTHROPIC_API_KEY is not set, so only the phrase list runs.\n')
+    }
+
+    const config = JSON.parse(await readFile(new URL('../config.json', import.meta.url), 'utf8'))
+    const verdict = await gutCheck({
+        post: { handle: 'posthog', text },
+        phrases: config.blockedPhrases,
+        apiKey,
+    })
+
+    console.log(`${verdict.status.toUpperCase()}: ${verdict.reason}`)
+    // An error must not read as permission, so it does not exit 0.
+    process.exit(verdict.status === 'error' ? 1 : 0)
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+    await checkOnePost()
 }
