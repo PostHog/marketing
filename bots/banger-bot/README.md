@@ -180,9 +180,15 @@ key meters nothing, PostHog holds one account, and a second bot should reuse the
 key rather than hold a copy. A shared key then rotates one time.
 
 Make the Anthropic key in the PostHog organization at
-<https://console.anthropic.com>, not in a personal organization. Put it in its
-own workspace with a spend limit. A Claude Pro or Max subscription is not API
-access, and it cannot serve as this key.
+<https://console.anthropic.com>, not in a personal organization. A Claude Pro or
+Max subscription is not API access, and it cannot serve as this key.
+
+**The Console shows the key one time only.** Paste it into the GitHub secret
+before you leave the page. A lost key cannot be read again, only replaced.
+
+Put the key in its own workspace with a spend limit if your Console role lets
+you make one. A Developer role often cannot, and the default workspace works
+fine. Ask an administrator for the spend limit afterwards.
 
 Create the Octolens key in **Octolens → Settings → API keys**.
 
