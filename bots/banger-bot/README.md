@@ -188,6 +188,12 @@ Octolens stopped delivering, and the posts it had already delivered aged out one
 by one. `negativeAuthors` was empty when this was checked, so nothing was
 suppressing those accounts.
 
+Read that table with one caveat. 5 and 6 September were a Saturday and a Sunday,
+so part of the fall is simply a quieter weekend inside a 96 hour window. It does
+not cover the rest. By Tuesday 8 September the window already held 2 full working
+days, and the brand account was still absent from it, and stayed absent through
+Wednesday and most of Thursday.
+
 A paused keyword produces exactly this shape, and so does a keyword that stops
 naming the platform the bot reads. Each run therefore reads
 `GET /api/v2/keywords` and reports the setup:
