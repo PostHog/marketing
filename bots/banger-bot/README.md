@@ -170,6 +170,37 @@ This is not theoretical. On 10 September 2026 the bot missed a post from
 `@posthog` about a session replay study. The text named no product and no brand,
 and Octolens had held nothing from `@posthog` for the 48 hours before it.
 
+#### Coverage can also collapse, which looks the same
+
+The gap above is structural, and it is not the whole story. Coverage is not
+fixed, and a drop in it reads exactly like the structural gap in the log.
+
+The run history for the first week shows a collapse:
+
+| Date            | Posts in the window | `@posthog` |
+| --------------- | ------------------- | ---------- |
+| 4 to 5 Sep 2026 | 38 to 39            | present    |
+| 8 Sep 2026      | 6                   | absent     |
+| 10 Sep 2026     | 25                  | absent     |
+
+The bot itself did not change. A 96 hour window that empties out like that means
+Octolens stopped delivering, and the posts it had already delivered aged out one
+by one. `negativeAuthors` was empty when this was checked, so nothing was
+suppressing those accounts.
+
+A paused keyword produces exactly this shape, and so does a keyword that stops
+naming the platform the bot reads. Each run therefore reads
+`GET /api/v2/keywords` and reports the setup:
+
+```
+Octolens tracks 10 keyword(s), 9 active. Own brand: posthog (active, twitter).
+::warning::These own brand keywords are paused: posthog.
+::warning::No active Octolens keyword is monitored on twitter.
+```
+
+That line names own brand keywords only. A competitor keyword list is business
+information, and an Actions log on a public repository is public.
+
 #### An account name as a keyword does not fix it
 
 A keyword matches the text of a post, and that does include the handle form, so
@@ -231,7 +262,8 @@ A post can pass two milestones between two runs. The bot then posts one message
 for the largest milestone. It marks the smaller milestones as announced.
 
 One run makes one Octolens request for each account, plus one for the global
-filter lists. That is 13 requests every 2 hours, so about 156 each day. The
+filter lists and one for the keyword list. That is 14 requests every 2 hours, so
+about 168 each day. The
 Octolens limit is 500 requests each hour for the whole organization, and other
 PostHog automations share that limit.
 

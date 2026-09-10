@@ -107,3 +107,17 @@ export async function listPostsByAuthor({ handle, source, limit, apiKey }) {
 export async function getGlobalFilters(apiKey) {
     return request('/filters/global', {}, apiKey)
 }
+
+/**
+ * Lists every keyword that the organization tracks.
+ *
+ * Octolens collects nothing for a paused keyword, and nothing on a platform
+ * that a keyword does not name. Either one starves the bot silently.
+ *
+ * @param {string} apiKey The Octolens API key.
+ * @returns {Promise<object[]>} The keyword objects.
+ */
+export async function listKeywords(apiKey) {
+    const payload = await request('/keywords', {}, apiKey)
+    return payload.data || []
+}

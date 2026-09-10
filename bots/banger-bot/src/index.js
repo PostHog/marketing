@@ -24,7 +24,13 @@ import { gutCheck } from './gutcheck.js'
 import { renderPostImage } from './image.js'
 import { highestOf, newlyCrossedThresholds } from './milestones.js'
 import { bangerTitle, renderBangerComment } from './message.js'
-import { getGlobalFilters, listPostsByAuthor, RateLimitError, toTrackedPost } from './octolens-api.js'
+import {
+    getGlobalFilters,
+    listKeywords,
+    listPostsByAuthor,
+    RateLimitError,
+    toTrackedPost,
+} from './octolens-api.js'
 import { loadState, prunePosts, saveState } from './state.js'
 import { postImageToSlack } from './slack.js'
 
@@ -121,6 +127,56 @@ async function warnAboutSuppressedAccounts(accounts, apiKey) {
             `Octolens suppresses these authors for every keyword: ${suppressed.join(', ')}. ` +
                 'The bot watches each of them, so it can never see their posts. Remove them ' +
                 'under Global Keyword Settings, in the negative authors list.'
+        )
+    }
+}
+
+/**
+ * Warns when the Octolens keyword setup cannot feed the bot.
+ *
+ * A paused keyword collects nothing, and a keyword collects nothing on a
+ * platform it does not name. Either one starves the bot while every run still
+ * reports success.
+ *
+ * The line names own brand keywords only. A competitor keyword list is business
+ * information, and an Actions log on a public repository is public.
+ *
+ * @param {string} source The platform the bot reads, from config.json.
+ * @param {string} apiKey The Octolens API key.
+ */
+async function warnAboutKeywordSetup(source, apiKey) {
+    let keywords
+    try {
+        keywords = await listKeywords(apiKey)
+    } catch (error) {
+        // A diagnostic must never stop a run.
+        log.info(`Could not read the Octolens keywords: ${error.message}`)
+        return
+    }
+
+    const active = keywords.filter((keyword) => !keyword.paused)
+    const brand = keywords.filter((keyword) => keyword.tag === 'own_brand')
+    const describe = (keyword) =>
+        `${keyword.keyword} (${keyword.paused ? 'PAUSED' : 'active'}, ` +
+        `${(keyword.platforms || []).includes(source) ? source : `no ${source}`})`
+
+    log.info(
+        `Octolens tracks ${keywords.length} keyword(s), ${active.length} active. ` +
+            `Own brand: ${brand.length > 0 ? brand.map(describe).join(', ') : 'none'}.`
+    )
+
+    const pausedBrand = brand.filter((keyword) => keyword.paused)
+    if (pausedBrand.length > 0) {
+        log.warn(
+            `These own brand keywords are paused: ${pausedBrand.map((k) => k.keyword).join(', ')}. ` +
+                'Octolens collects nothing for a paused keyword, so every post they used to match ' +
+                'is now invisible to the bot.'
+        )
+    }
+
+    if (keywords.length > 0 && !active.some((keyword) => (keyword.platforms || []).includes(source))) {
+        log.warn(
+            `No active Octolens keyword is monitored on ${source}, so the bot can receive nothing.`
         )
     }
 }
@@ -265,6 +321,7 @@ async function main() {
 
     logCoverage(current, config, now)
     await warnAboutSuppressedAccounts(config.accounts, apiKey)
+    await warnAboutKeywordSetup(config.source, apiKey)
 
     // ── 3. Announce the new milestones ────────────────────────────────────
     if (!anthropicKey) {
