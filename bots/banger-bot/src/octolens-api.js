@@ -93,3 +93,31 @@ export async function listPostsByAuthor({ handle, source, limit, apiKey }) {
     )
     return payload.data || []
 }
+
+/**
+ * Reads the org-wide Octolens filter lists.
+ *
+ * These lists are always active, and they can only reduce what Octolens holds.
+ * An account named in negativeAuthors is therefore suppressed for every
+ * keyword, and the bot can never see a post from it.
+ *
+ * @param {string} apiKey The Octolens API key.
+ * @returns {Promise<object>} The GlobalFilters object.
+ */
+export async function getGlobalFilters(apiKey) {
+    return request('/filters/global', {}, apiKey)
+}
+
+/**
+ * Lists every keyword that the organization tracks.
+ *
+ * Octolens collects nothing for a paused keyword, and nothing on a platform
+ * that a keyword does not name. Either one starves the bot silently.
+ *
+ * @param {string} apiKey The Octolens API key.
+ * @returns {Promise<object[]>} The keyword objects.
+ */
+export async function listKeywords(apiKey) {
+    const payload = await request('/keywords', {}, apiKey)
+    return payload.data || []
+}

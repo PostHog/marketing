@@ -24,7 +24,13 @@ import { gutCheck } from './gutcheck.js'
 import { renderPostImage } from './image.js'
 import { highestOf, newlyCrossedThresholds } from './milestones.js'
 import { bangerTitle, renderBangerComment } from './message.js'
-import { listPostsByAuthor, RateLimitError, toTrackedPost } from './octolens-api.js'
+import {
+    getGlobalFilters,
+    listKeywords,
+    listPostsByAuthor,
+    RateLimitError,
+    toTrackedPost,
+} from './octolens-api.js'
 import { loadState, prunePosts, saveState } from './state.js'
 import { postImageToSlack } from './slack.js'
 
@@ -48,11 +54,11 @@ const minutesSince = (timestamp, now) => Math.round((now - Date.parse(timestamp)
  * make the gap visible, so the team can judge whether Octolens is enough.
  *
  * @param {object[]} posts The posts inside the tracking window.
- * @param {string[]} accounts The configured accounts.
- * @param {number} windowHours Length of the tracking window in hours.
+ * @param {object} config The parsed config file.
  * @param {number} now Current time in milliseconds.
  */
-function logCoverage(posts, accounts, windowHours, now) {
+function logCoverage(posts, config, now) {
+    const { accounts, trackWindowHours: windowHours, brandAccount } = config
     const handles = new Set(posts.map((post) => post.handle.toLowerCase()))
     log.info(
         `Coverage: ${posts.length} post(s) inside the ${windowHours} hour window, ` +
@@ -64,6 +70,25 @@ function logCoverage(posts, accounts, windowHours, now) {
         log.info(`No posts in the window from: ${silent.map((handle) => `@${handle}`).join(', ')}.`)
     }
 
+    // The brand account carries most of the bangers, so its absence is the one
+    // coverage gap worth shouting about rather than logging quietly.
+    if (brandAccount && !handles.has(brandAccount.toLowerCase())) {
+        log.warn(
+            `Octolens holds no post from @${brandAccount} inside the ${windowHours} hour window, ` +
+                'so the bot is blind to the brand account. Octolens collects by keyword, and a ' +
+                'brand post that never names PostHog does not reach the bot at all.'
+        )
+    }
+
+    // "Tracking N post(s)" cannot answer "did the bot see my post". This can.
+    const top = [...posts].sort((a, b) => b.likes - a.likes).slice(0, 5)
+    if (top.length > 0) {
+        log.info(
+            'Top tracked posts: ' +
+                top.map((post) => `@${post.handle} ${post.likes.toLocaleString('en-US')} (${post.id})`).join(', ')
+        )
+    }
+
     // Octolens does not document how often it refreshes the counters. This line
     // shows whether the 2 hour schedule reads fresh numbers or repeats old ones.
     const ages = posts.map((post) => post.observedAt).filter(Boolean).map((at) => minutesSince(at, now))
@@ -71,6 +96,88 @@ function logCoverage(posts, accounts, windowHours, now) {
         log.info(`Engagement observed between ${Math.min(...ages)} and ${Math.max(...ages)} minute(s) ago.`)
     } else if (posts.length > 0) {
         log.warn('Octolens returned no engagement timestamps. The like counts may be stale.')
+    }
+}
+
+/**
+ * Warns when Octolens is set up to suppress an account that the bot watches.
+ *
+ * negativeAuthors is org-wide and always active, so one entry there hides an
+ * account from every keyword. In a log that only counts posts, that looks
+ * exactly like a keyword gap, and the fix is a 2 minute edit in Octolens.
+ *
+ * @param {string[]} accounts The configured accounts.
+ * @param {string} apiKey The Octolens API key.
+ */
+async function warnAboutSuppressedAccounts(accounts, apiKey) {
+    let filters
+    try {
+        filters = await getGlobalFilters(apiKey)
+    } catch (error) {
+        // A diagnostic must never stop a run.
+        log.info(`Could not read the Octolens global filters: ${error.message}`)
+        return
+    }
+
+    const suppressed = (filters.negativeAuthors || []).filter((author) =>
+        accounts.some((handle) => handle.toLowerCase() === author.toLowerCase())
+    )
+    if (suppressed.length > 0) {
+        log.warn(
+            `Octolens suppresses these authors for every keyword: ${suppressed.join(', ')}. ` +
+                'The bot watches each of them, so it can never see their posts. Remove them ' +
+                'under Global Keyword Settings, in the negative authors list.'
+        )
+    }
+}
+
+/**
+ * Warns when the Octolens keyword setup cannot feed the bot.
+ *
+ * A paused keyword collects nothing, and a keyword collects nothing on a
+ * platform it does not name. Either one starves the bot while every run still
+ * reports success.
+ *
+ * The line names own brand keywords only. A competitor keyword list is business
+ * information, and an Actions log on a public repository is public.
+ *
+ * @param {string} source The platform the bot reads, from config.json.
+ * @param {string} apiKey The Octolens API key.
+ */
+async function warnAboutKeywordSetup(source, apiKey) {
+    let keywords
+    try {
+        keywords = await listKeywords(apiKey)
+    } catch (error) {
+        // A diagnostic must never stop a run.
+        log.info(`Could not read the Octolens keywords: ${error.message}`)
+        return
+    }
+
+    const active = keywords.filter((keyword) => !keyword.paused)
+    const brand = keywords.filter((keyword) => keyword.tag === 'own_brand')
+    const describe = (keyword) =>
+        `${keyword.keyword} (${keyword.paused ? 'PAUSED' : 'active'}, ` +
+        `${(keyword.platforms || []).includes(source) ? source : `no ${source}`})`
+
+    log.info(
+        `Octolens tracks ${keywords.length} keyword(s), ${active.length} active. ` +
+            `Own brand: ${brand.length > 0 ? brand.map(describe).join(', ') : 'none'}.`
+    )
+
+    const pausedBrand = brand.filter((keyword) => keyword.paused)
+    if (pausedBrand.length > 0) {
+        log.warn(
+            `These own brand keywords are paused: ${pausedBrand.map((k) => k.keyword).join(', ')}. ` +
+                'Octolens collects nothing for a paused keyword, so every post they used to match ' +
+                'is now invisible to the bot.'
+        )
+    }
+
+    if (keywords.length > 0 && !active.some((keyword) => (keyword.platforms || []).includes(source))) {
+        log.warn(
+            `No active Octolens keyword is monitored on ${source}, so the bot can receive nothing.`
+        )
     }
 }
 
@@ -212,7 +319,9 @@ async function main() {
     }
     prunePosts(state, config.trackWindowHours, now)
 
-    logCoverage(current, config.accounts, config.trackWindowHours, now)
+    logCoverage(current, config, now)
+    await warnAboutSuppressedAccounts(config.accounts, apiKey)
+    await warnAboutKeywordSetup(config.source, apiKey)
 
     // ── 3. Announce the new milestones ────────────────────────────────────
     if (!anthropicKey) {
