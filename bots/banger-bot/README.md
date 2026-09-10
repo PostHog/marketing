@@ -170,7 +170,41 @@ This is not theoretical. On 10 September 2026 the bot missed a post from
 `@posthog` about a session replay study. The text named no product and no brand,
 and Octolens had held nothing from `@posthog` for the 48 hours before it.
 
-There are 3 ways out, in rising cost:
+#### An account name as a keyword does not fix it
+
+A keyword matches the text of a post, and that does include the handle form, so
+the keyword `posthog` matches a post whose body says `@posthog`. It does not
+match the author field. A post written by `@posthog` never names `@posthog` in
+its own body, so a keyword for each account collects mentions **of** those
+accounts, which the workspace already has, and still misses everything they
+publish.
+
+Octolens has no query syntax, so there is no `from:` operator either. Its author
+field is filterable in one direction only. `negativeAuthors` excludes an author
+org-wide, and there is no positive author list. In Octolens' own words, the
+global settings "can only reduce results, they can't expand them".
+
+#### Check the negative authors list before anything else
+
+`negativeAuthors` is org-wide and always active, so one entry there hides an
+account from every keyword. The example in the Octolens docs is a company
+listing its own handles, which is a reasonable thing to want for a
+brand-mentions feed and fatal for this bot.
+
+Each run therefore reads `GET /api/v2/filters/global` and warns when a watched
+account is on that list:
+
+```
+::warning::Octolens suppresses these authors for every keyword: PostHog.
+```
+
+Octolens matches that list case-sensitively, so `PostHog` does not actually
+suppress an author whose handle is `posthog`. The bot compares
+case-insensitively on purpose, because a near miss is worth a human look either
+way. The check needs only the `read` scope, and a failure to read it logs a line
+and never stops the run.
+
+#### The 3 real ways out, in rising cost
 
 1. **Track a product keyword in Octolens.** Cheap, and it widens the net. It
    still misses a post that names nothing, and a generic term adds noise for
@@ -196,9 +230,10 @@ runs the bot every 2 hours. One run does 5 steps:
 A post can pass two milestones between two runs. The bot then posts one message
 for the largest milestone. It marks the smaller milestones as announced.
 
-One run makes one Octolens request for each account. The Octolens limit is 500
-requests each hour for the whole organization, and the bot uses about 72 each
-day. Other PostHog automations share that limit.
+One run makes one Octolens request for each account, plus one for the global
+filter lists. That is 13 requests every 2 hours, so about 156 each day. The
+Octolens limit is 500 requests each hour for the whole organization, and other
+PostHog automations share that limit.
 
 ## Files
 

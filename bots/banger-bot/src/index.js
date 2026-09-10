@@ -24,7 +24,7 @@ import { gutCheck } from './gutcheck.js'
 import { renderPostImage } from './image.js'
 import { highestOf, newlyCrossedThresholds } from './milestones.js'
 import { bangerTitle, renderBangerComment } from './message.js'
-import { listPostsByAuthor, RateLimitError, toTrackedPost } from './octolens-api.js'
+import { getGlobalFilters, listPostsByAuthor, RateLimitError, toTrackedPost } from './octolens-api.js'
 import { loadState, prunePosts, saveState } from './state.js'
 import { postImageToSlack } from './slack.js'
 
@@ -90,6 +90,38 @@ function logCoverage(posts, config, now) {
         log.info(`Engagement observed between ${Math.min(...ages)} and ${Math.max(...ages)} minute(s) ago.`)
     } else if (posts.length > 0) {
         log.warn('Octolens returned no engagement timestamps. The like counts may be stale.')
+    }
+}
+
+/**
+ * Warns when Octolens is set up to suppress an account that the bot watches.
+ *
+ * negativeAuthors is org-wide and always active, so one entry there hides an
+ * account from every keyword. In a log that only counts posts, that looks
+ * exactly like a keyword gap, and the fix is a 2 minute edit in Octolens.
+ *
+ * @param {string[]} accounts The configured accounts.
+ * @param {string} apiKey The Octolens API key.
+ */
+async function warnAboutSuppressedAccounts(accounts, apiKey) {
+    let filters
+    try {
+        filters = await getGlobalFilters(apiKey)
+    } catch (error) {
+        // A diagnostic must never stop a run.
+        log.info(`Could not read the Octolens global filters: ${error.message}`)
+        return
+    }
+
+    const suppressed = (filters.negativeAuthors || []).filter((author) =>
+        accounts.some((handle) => handle.toLowerCase() === author.toLowerCase())
+    )
+    if (suppressed.length > 0) {
+        log.warn(
+            `Octolens suppresses these authors for every keyword: ${suppressed.join(', ')}. ` +
+                'The bot watches each of them, so it can never see their posts. Remove them ' +
+                'under Global Keyword Settings, in the negative authors list.'
+        )
     }
 }
 
@@ -232,6 +264,7 @@ async function main() {
     prunePosts(state, config.trackWindowHours, now)
 
     logCoverage(current, config, now)
+    await warnAboutSuppressedAccounts(config.accounts, apiKey)
 
     // ── 3. Announce the new milestones ────────────────────────────────────
     if (!anthropicKey) {
