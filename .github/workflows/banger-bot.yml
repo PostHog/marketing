@@ -12,7 +12,10 @@ name: Banger Bot
 # hold every post from these accounts. Read the coverage section of the README.
 #
 # SETUP:
-# 1. Add these repository secrets (Settings → Secrets and variables → Actions):
+# 1. Add these as ORGANISATION secrets, scoped to this repository alone, under
+#    Organization settings → Secrets and variables → Actions. PostHog policy
+#    keeps Actions secrets at the organisation, not on the repository. Read
+#    bots/banger-bot/README.md for the reason and the order to add them in.
 #      - OCTOLENS_API_KEY   An Octolens API key with the read scope.
 #      - BANGER_BOT_SLACK_TOKEN       A Slack bot token with files:write and
 #                                     chat:write.
