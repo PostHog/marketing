@@ -48,11 +48,11 @@ const minutesSince = (timestamp, now) => Math.round((now - Date.parse(timestamp)
  * make the gap visible, so the team can judge whether Octolens is enough.
  *
  * @param {object[]} posts The posts inside the tracking window.
- * @param {string[]} accounts The configured accounts.
- * @param {number} windowHours Length of the tracking window in hours.
+ * @param {object} config The parsed config file.
  * @param {number} now Current time in milliseconds.
  */
-function logCoverage(posts, accounts, windowHours, now) {
+function logCoverage(posts, config, now) {
+    const { accounts, trackWindowHours: windowHours, brandAccount } = config
     const handles = new Set(posts.map((post) => post.handle.toLowerCase()))
     log.info(
         `Coverage: ${posts.length} post(s) inside the ${windowHours} hour window, ` +
@@ -62,6 +62,25 @@ function logCoverage(posts, accounts, windowHours, now) {
     const silent = accounts.filter((handle) => !handles.has(handle.toLowerCase()))
     if (silent.length > 0) {
         log.info(`No posts in the window from: ${silent.map((handle) => `@${handle}`).join(', ')}.`)
+    }
+
+    // The brand account carries most of the bangers, so its absence is the one
+    // coverage gap worth shouting about rather than logging quietly.
+    if (brandAccount && !handles.has(brandAccount.toLowerCase())) {
+        log.warn(
+            `Octolens holds no post from @${brandAccount} inside the ${windowHours} hour window, ` +
+                'so the bot is blind to the brand account. Octolens collects by keyword, and a ' +
+                'brand post that never names PostHog does not reach the bot at all.'
+        )
+    }
+
+    // "Tracking N post(s)" cannot answer "did the bot see my post". This can.
+    const top = [...posts].sort((a, b) => b.likes - a.likes).slice(0, 5)
+    if (top.length > 0) {
+        log.info(
+            'Top tracked posts: ' +
+                top.map((post) => `@${post.handle} ${post.likes.toLocaleString('en-US')} (${post.id})`).join(', ')
+        )
     }
 
     // Octolens does not document how often it refreshes the counters. This line
@@ -212,7 +231,7 @@ async function main() {
     }
     prunePosts(state, config.trackWindowHours, now)
 
-    logCoverage(current, config.accounts, config.trackWindowHours, now)
+    logCoverage(current, config, now)
 
     // ── 3. Announce the new milestones ────────────────────────────────────
     if (!anthropicKey) {

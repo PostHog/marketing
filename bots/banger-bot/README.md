@@ -135,22 +135,51 @@ keyword. A post from `@posthog` that never says "PostHog" does not reach the
 bot. Employee posts match a keyword even less often.
 
 The bot cannot see a post that Octolens does not hold, so a gap is silent. Each
-run therefore logs a coverage line:
+run therefore logs what it saw:
 
 ```
-Coverage: 14 post(s) inside the 96 hour window, from 5 of 12 account(s).
+Coverage: 25 post(s) inside the 96 hour window, from 7 of 12 account(s).
 No posts in the window from: @example, @example2
-Engagement observed between 12 and 47 minute(s) ago.
+Top tracked posts: @posthog 193 (1930000000000000000), @example 88 (1931...)
+Engagement observed between 126 and 4425 minute(s) ago.
 ```
 
-Read these lines in the job log after a week. They answer 2 questions:
+`Top tracked posts` answers the question the other lines cannot: **did the bot
+see one particular post?** Look for the post id, and read the like count that
+the bot is working from. A run also raises a warning when Octolens holds nothing
+from `brandAccount`:
 
-1. **Is the coverage good enough?** If most accounts never appear, Octolens is
-   the wrong source. The X API v2 covers every account, and it costs about $200
-   each month.
-2. **Is the data fresh enough?** Octolens does not document how often it
-   refreshes the counters. If the observed age is many hours, the 2 hour
-   schedule is too frequent, and an alert arrives late.
+```
+::warning::Octolens holds no post from @posthog inside the 96 hour window, so
+the bot is blind to the brand account.
+```
+
+`Engagement observed` answers a second question. Octolens does not document how
+often it refreshes a counter. A maximum age that grows by one run interval on
+every run means Octolens observed that post once and stopped, so its like count
+is frozen and the bot can never see it cross a milestone.
+
+### The brand account gap is permanent
+
+Octolens monitors keywords. It has no own-account feed, and no setting that
+collects everything one account publishes. A brand post therefore reaches the
+bot only when the post text matches a tracked keyword, and PostHog often writes
+without naming PostHog: "your product", "we built", "ours".
+
+This is not theoretical. On 10 September 2026 the bot missed a post from
+`@posthog` about a session replay study. The text named no product and no brand,
+and Octolens had held nothing from `@posthog` for the 48 hours before it.
+
+There are 3 ways out, in rising cost:
+
+1. **Track a product keyword in Octolens.** Cheap, and it widens the net. It
+   still misses a post that names nothing, and a generic term adds noise for
+   every other Octolens consumer.
+2. **Push one post through by hand** when somebody spots a miss. The bot has no
+   mode for this yet.
+3. **Read the brand account from the X API v2** rather than Octolens. That
+   endpoint returns a full author timeline, so the gap closes. Basic access
+   costs about $200 each month.
 
 ## How it works
 
