@@ -67,9 +67,10 @@ The check has 2 layers:
 - **A phrase list.** `blockedPhrases` in `config.json`. It runs always, and it
   costs nothing. Keep it short and exact, because the second layer reads the
   meaning.
-- **A judgment call by Claude.** This layer runs when
-  `BANGER_BOT_ANTHROPIC_API_KEY` is set. Without the key, the bot screens a post
-  against the phrase list only, and it writes a warning in the log.
+- **A judgment call by Claude.** The bot calls Claude through PostHog's AI
+  gateway. This layer runs when `BANGER_BOT_AI_GATEWAY_API_KEY` is set. Without
+  the key, the bot screens a post against the phrase list only, and it writes a
+  warning in the log.
 
 **The check fails closed.** When Claude cannot answer, the bot posts nothing for
 that run, and the next run asks again. A missed celebration costs little. A bad
@@ -87,7 +88,7 @@ Read one post by hand to see what the judgment layer does with it:
 ```sh
 cd bots/banger-bot
 npm install
-BANGER_BOT_ANTHROPIC_API_KEY=... node src/gutcheck.js "the text of the post"
+BANGER_BOT_AI_GATEWAY_API_KEY=... node src/gutcheck.js "the text of the post"
 ```
 
 It prints `ALLOW`, `BLOCK`, or `ERROR` with the reason. Feed it real posts,
@@ -294,37 +295,35 @@ PostHog automations share that limit.
 
 Add 4 repository secrets under **Settings → Secrets and variables → Actions**:
 
-| Secret                         | Value                                      |
-| ------------------------------ | ------------------------------------------ |
-| `BANGER_BOT_SLACK_TOKEN`       | A Slack bot token, `xoxb-...`.              |
-| `BANGER_BOT_SLACK_CHANNEL_ID`  | The id of `#team-editorial`.                |
-| `BANGER_BOT_ANTHROPIC_API_KEY` | Runs the judgment layer of the gut check.   |
-| `OCTOLENS_API_KEY`             | An Octolens API key with the `read` scope.  |
+| Secret                          | Value                                       |
+| ------------------------------- | ------------------------------------------- |
+| `BANGER_BOT_SLACK_TOKEN`        | A Slack bot token, `xoxb-...`.              |
+| `BANGER_BOT_SLACK_CHANNEL_ID`   | The id of `#team-editorial`.                |
+| `BANGER_BOT_AI_GATEWAY_API_KEY` | Runs the judgment layer of the gut check.   |
+| `OCTOLENS_API_KEY`              | An Octolens API key with the `read` scope.  |
 
 ### Why 3 secrets carry a prefix and 1 does not
 
 A secret carries the `BANGER_BOT_` prefix when a second bot must not share it:
 
 - Each bot needs its own Slack app and its own channel.
-- The Anthropic key meters spend for each call. A key for each bot gives you
-  cost for each bot in the Anthropic Console, and it lets you cap this bot with
-  a workspace spend limit. A runaway bot then cannot drain the shared budget,
-  and you can revoke one bot without stopping the others.
+- The AI gateway key meters spend for each call, and the team that owns the
+  key pays for it. A key for each bot gives you cost for each bot, and you can
+  revoke one bot without stopping the others.
 
 `OCTOLENS_API_KEY` has no prefix, because Octolens is a flat subscription. The
 key meters nothing, PostHog holds one account, and a second bot should reuse the
 key rather than hold a copy. A shared key then rotates one time.
 
-Make the Anthropic key in the PostHog organization at
-<https://console.anthropic.com>, not in a personal organization. A Claude Pro or
-Max subscription is not API access, and it cannot serve as this key.
+Make the AI gateway key as a `phs_` project secret API key with the
+`llm_gateway:read` scope, in the PostHog project whose team should pay for the
+calls. The bot sends `X-PostHog-Product: banger_bot`, so its spend shows up
+under that product. The key is shown one time only, so paste it into the GitHub
+secret before you leave the page.
 
-**The Console shows the key one time only.** Paste it into the GitHub secret
-before you leave the page. A lost key cannot be read again, only replaced.
-
-Put the key in its own workspace with a spend limit if your Console role lets
-you make one. A Developer role often cannot, and the default workspace works
-fine. Ask an administrator for the spend limit afterwards.
+The bot calls `https://ai-gateway.us.posthog.com` by default. Set
+`AI_GATEWAY_URL` to point it at another gateway. Leave `/v1` off the URL,
+because the Anthropic SDK adds `/v1/messages` itself.
 
 Create the Octolens key in **Octolens → Settings → API**. Give it the `read`
 scope. The bot only reads mentions, so `write` and `admin` grant more than it

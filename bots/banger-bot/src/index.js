@@ -20,7 +20,7 @@ import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { gutCheck } from './gutcheck.js'
+import { GATEWAY_URL_DEFAULT, gutCheck } from './gutcheck.js'
 import { renderPostImage } from './image.js'
 import { highestOf, newlyCrossedThresholds } from './milestones.js'
 import { bangerTitle, renderBangerComment } from './message.js'
@@ -224,7 +224,8 @@ async function main() {
     const apiKey = process.env.OCTOLENS_API_KEY
     const slackToken = process.env.BANGER_BOT_SLACK_TOKEN
     const channelId = process.env.BANGER_BOT_SLACK_CHANNEL_ID
-    const anthropicKey = process.env.BANGER_BOT_ANTHROPIC_API_KEY
+    const gatewayKey = process.env.BANGER_BOT_AI_GATEWAY_API_KEY
+    const gatewayURL = process.env.AI_GATEWAY_URL || GATEWAY_URL_DEFAULT
     const dryRun = process.env.DRY_RUN === 'true'
     const testPost = process.env.TEST_POST === 'true'
     const configPath = process.env.BANGER_BOT_CONFIG || DEFAULT_CONFIG
@@ -324,8 +325,8 @@ async function main() {
     await warnAboutKeywordSetup(config.source, apiKey)
 
     // ── 3. Announce the new milestones ────────────────────────────────────
-    if (!anthropicKey) {
-        log.warn('BANGER_BOT_ANTHROPIC_API_KEY is not set. The gut check runs on the phrase list only.')
+    if (!gatewayKey) {
+        log.warn('BANGER_BOT_AI_GATEWAY_API_KEY is not set. The gut check runs on the phrase list only.')
     }
 
     let posted = 0
@@ -342,7 +343,12 @@ async function main() {
         }
 
         // A post can pass a milestone and still be wrong to celebrate.
-        const check = await gutCheck({ post, phrases: config.blockedPhrases, apiKey: anthropicKey })
+        const check = await gutCheck({
+            post,
+            phrases: config.blockedPhrases,
+            apiKey: gatewayKey,
+            baseURL: gatewayURL,
+        })
         if (check.status === 'error') {
             // An error is not permission. Nothing is marked, so the next run
             // asks again.

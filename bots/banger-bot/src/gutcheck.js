@@ -6,8 +6,8 @@
 //
 // The check has 2 layers:
 //   1. A phrase list in config.json. It runs always, and it costs nothing.
-//   2. A judgment call by Claude. It runs when BANGER_BOT_ANTHROPIC_API_KEY
-//      is set.
+//   2. A judgment call by Claude through PostHog's AI gateway. It runs when
+//      BANGER_BOT_AI_GATEWAY_API_KEY is set.
 //
 // The phrase list is a backstop, not the filter. Claude reads the meaning of
 // every post that the phrase list did not already block, so the list does not
@@ -18,7 +18,7 @@
 // again on the next run.
 //
 // To read one post by hand, and to calibrate the prompt against real posts:
-//   BANGER_BOT_ANTHROPIC_API_KEY=... node src/gutcheck.js "the post text"
+//   BANGER_BOT_AI_GATEWAY_API_KEY=... node src/gutcheck.js "the post text"
 
 import { readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
@@ -28,6 +28,8 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
 
 const MODEL = 'claude-opus-5'
+export const GATEWAY_URL_DEFAULT = 'https://ai-gateway.us.posthog.com'
+const GATEWAY_PRODUCT = 'banger_bot'
 
 const Verdict = z.object({
     safe_to_celebrate: z.boolean(),
@@ -83,11 +85,12 @@ export function blockedPhrase(post, phrases = []) {
  * @param {object} options
  * @param {object} options.post The tracked post.
  * @param {string[]} options.phrases Blocked phrases from the config file.
- * @param {string} [options.apiKey] An Anthropic API key. The judgment layer is
- *   off when this is absent.
+ * @param {string} [options.apiKey] A PostHog AI gateway key, `phs_...`. The
+ *   judgment layer is off when this is absent.
+ * @param {string} [options.baseURL] The AI gateway URL, without `/v1`.
  * @returns {Promise<{status: 'allow'|'block'|'error', reason: string}>}
  */
-export async function gutCheck({ post, phrases, apiKey }) {
+export async function gutCheck({ post, phrases, apiKey, baseURL = GATEWAY_URL_DEFAULT }) {
     const phrase = blockedPhrase(post, phrases)
     if (phrase) {
         return { status: 'block', reason: `The post holds the blocked phrase "${phrase}".` }
@@ -98,7 +101,11 @@ export async function gutCheck({ post, phrases, apiKey }) {
     }
 
     try {
-        const client = new Anthropic({ apiKey })
+        const client = new Anthropic({
+            apiKey,
+            baseURL,
+            defaultHeaders: { 'X-PostHog-Product': GATEWAY_PRODUCT },
+        })
         const response = await client.messages.parse({
             model: MODEL,
             max_tokens: 2048,
@@ -139,9 +146,9 @@ async function checkOnePost() {
         process.exit(2)
     }
 
-    const apiKey = process.env.BANGER_BOT_ANTHROPIC_API_KEY
+    const apiKey = process.env.BANGER_BOT_AI_GATEWAY_API_KEY
     if (!apiKey) {
-        console.error('BANGER_BOT_ANTHROPIC_API_KEY is not set, so only the phrase list runs.\n')
+        console.error('BANGER_BOT_AI_GATEWAY_API_KEY is not set, so only the phrase list runs.\n')
     }
 
     const config = JSON.parse(await readFile(new URL('../config.json', import.meta.url), 'utf8'))
@@ -149,6 +156,7 @@ async function checkOnePost() {
         post: { handle: 'posthog', text },
         phrases: config.blockedPhrases,
         apiKey,
+        baseURL: process.env.AI_GATEWAY_URL || GATEWAY_URL_DEFAULT,
     })
 
     console.log(`${verdict.status.toUpperCase()}: ${verdict.reason}`)

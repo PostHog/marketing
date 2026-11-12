@@ -17,11 +17,10 @@ name: Banger Bot
 #      - BANGER_BOT_SLACK_TOKEN       A Slack bot token with files:write and
 #                                     chat:write.
 #      - BANGER_BOT_SLACK_CHANNEL_ID  The id of #team-editorial.
-#      - BANGER_BOT_ANTHROPIC_API_KEY  Runs the gut check. Without it the bot
-#                                     screens a post against the phrase list
-#                                     only. Make a dedicated Console key with a
-#                                     spend limit, so this bot cannot drain the
-#                                     shared budget.
+#      - BANGER_BOT_AI_GATEWAY_API_KEY  Runs the gut check through PostHog's
+#                                     AI gateway. A phs_ key for this bot.
+#                                     Without it the bot screens a post
+#                                     against the phrase list only.
 # 2. Invite the Slack app to the channel, or the upload fails with
 #    not_in_channel.
 # 3. Test Slack: Actions tab → "Banger Bot" → Run workflow → set test_post to
@@ -106,7 +105,7 @@ jobs:
                   OCTOLENS_API_KEY: ${{ secrets.OCTOLENS_API_KEY }}
                   BANGER_BOT_SLACK_TOKEN: ${{ secrets.BANGER_BOT_SLACK_TOKEN }}
                   BANGER_BOT_SLACK_CHANNEL_ID: ${{ secrets.BANGER_BOT_SLACK_CHANNEL_ID }}
-                  BANGER_BOT_ANTHROPIC_API_KEY: ${{ secrets.BANGER_BOT_ANTHROPIC_API_KEY }}
+                  BANGER_BOT_AI_GATEWAY_API_KEY: ${{ secrets.BANGER_BOT_AI_GATEWAY_API_KEY }}
                   DRY_RUN: ${{ inputs.dry_run }}
                   TEST_POST: ${{ inputs.test_post }}
 
