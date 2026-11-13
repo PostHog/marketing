@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { once } from 'node:events'
+import { createServer } from 'node:http'
 import test from 'node:test'
 
 import { blockedPhrase, gutCheck } from '../src/gutcheck.js'
@@ -78,6 +80,130 @@ test('the gut check falls back to the phrase list without an API key', async () 
     const leaving = await gutCheck({ post: { text: 'leaving PostHog today' }, phrases: PHRASES })
     assert.equal(leaving.status, 'block')
 })
+
+async function gutCheckThroughGateway(respond, suffix = '') {
+    const requests = []
+    const server = createServer(async (request, response) => {
+        const chunks = []
+        for await (const chunk of request) {
+            chunks.push(chunk)
+        }
+        requests.push({
+            url: request.url,
+            headers: request.headers,
+            body: JSON.parse(Buffer.concat(chunks).toString('utf8')),
+        })
+        const { status, body } = respond()
+        response.writeHead(status, { 'content-type': 'application/json' })
+        response.end(JSON.stringify(body))
+    })
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    try {
+        const check = await gutCheck({
+            post: { handle: 'posthog', text: 'we shipped a thing' },
+            phrases: PHRASES,
+            apiKey: 'phs_test',
+            baseURL: `http://127.0.0.1:${server.address().port}${suffix}`,
+        })
+        return { check, requests }
+    } finally {
+        server.close()
+    }
+}
+
+function verdictMessage(verdict) {
+    return {
+        status: 200,
+        body: {
+            id: 'msg_test',
+            type: 'message',
+            role: 'assistant',
+            model: 'claude-opus-5',
+            content: [{ type: 'text', text: JSON.stringify(verdict) }],
+            stop_reason: 'end_turn',
+            stop_sequence: null,
+            usage: { input_tokens: 1, output_tokens: 1 },
+        },
+    }
+}
+
+for (const { name, suffix, read, expected } of [
+    { name: 'calls one request', suffix: '', read: (requests) => requests.length, expected: 1 },
+    {
+        name: 'calls the messages path',
+        suffix: '',
+        read: (requests) => requests[0].url,
+        expected: '/v1/messages',
+    },
+    {
+        name: 'calls the messages path when the URL ends in /v1',
+        suffix: '/v1/',
+        read: (requests) => requests[0].url,
+        expected: '/v1/messages',
+    },
+    {
+        name: 'sends the gateway key',
+        suffix: '',
+        read: (requests) => requests[0].headers['x-api-key'],
+        expected: 'phs_test',
+    },
+    {
+        name: 'sends the product header',
+        suffix: '',
+        read: (requests) => requests[0].headers['x-posthog-product'],
+        expected: 'banger_bot',
+    },
+    {
+        name: 'asks for structured output',
+        suffix: '',
+        read: (requests) => requests[0].body.output_config.format.type,
+        expected: 'json_schema',
+    },
+]) {
+    test(`the gut check through the AI gateway ${name}`, async () => {
+        const { requests } = await gutCheckThroughGateway(
+            () =>
+                verdictMessage({ safe_to_celebrate: true, category: 'fine', reason: 'A launch.' }),
+            suffix,
+        )
+        assert.equal(read(requests), expected)
+    })
+}
+
+for (const { name, response, status } of [
+    {
+        name: 'allows a post that Claude allows',
+        response: verdictMessage({
+            safe_to_celebrate: true,
+            category: 'fine',
+            reason: 'A launch.',
+        }),
+        status: 'allow',
+    },
+    {
+        name: 'blocks a post that Claude blocks',
+        response: verdictMessage({
+            safe_to_celebrate: false,
+            category: 'departure',
+            reason: 'Leaving.',
+        }),
+        status: 'block',
+    },
+    {
+        name: 'fails closed when the gateway refuses the call',
+        response: {
+            status: 401,
+            body: { type: 'error', error: { type: 'authentication_error', message: 'no' } },
+        },
+        status: 'error',
+    },
+]) {
+    test(`the gut check ${name}`, async () => {
+        const { check } = await gutCheckThroughGateway(() => response)
+        assert.equal(check.status, status)
+    })
+}
 
 test('pruning removes posts from outside the window', () => {
     const now = Date.parse('2026-09-03T12:00:00Z')
