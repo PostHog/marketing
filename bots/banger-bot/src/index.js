@@ -20,7 +20,7 @@ import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { GATEWAY_URL_DEFAULT, gutCheck } from './gutcheck.js'
+import { gutCheck } from './gutcheck.js'
 import { renderPostImage } from './image.js'
 import { highestOf, newlyCrossedThresholds } from './milestones.js'
 import { bangerTitle, renderBangerComment } from './message.js'
@@ -225,7 +225,7 @@ async function main() {
     const slackToken = process.env.BANGER_BOT_SLACK_TOKEN
     const channelId = process.env.BANGER_BOT_SLACK_CHANNEL_ID
     const gatewayKey = process.env.BANGER_BOT_AI_GATEWAY_API_KEY
-    const gatewayURL = process.env.AI_GATEWAY_URL || GATEWAY_URL_DEFAULT
+    const gatewayURL = process.env.AI_GATEWAY_URL
     const dryRun = process.env.DRY_RUN === 'true'
     const testPost = process.env.TEST_POST === 'true'
     const configPath = process.env.BANGER_BOT_CONFIG || DEFAULT_CONFIG
@@ -326,7 +326,9 @@ async function main() {
 
     // ── 3. Announce the new milestones ────────────────────────────────────
     if (!gatewayKey) {
-        log.warn('BANGER_BOT_AI_GATEWAY_API_KEY is not set. The gut check runs on the phrase list only.')
+        log.warn(
+            'BANGER_BOT_AI_GATEWAY_API_KEY is not set. The gut check runs on the phrase list only.',
+        )
     }
 
     let posted = 0

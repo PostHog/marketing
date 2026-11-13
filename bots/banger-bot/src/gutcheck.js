@@ -28,7 +28,7 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
 
 const MODEL = 'claude-opus-5'
-export const GATEWAY_URL_DEFAULT = 'https://ai-gateway.us.posthog.com'
+const GATEWAY_URL_DEFAULT = 'https://ai-gateway.us.posthog.com'
 const GATEWAY_PRODUCT = 'banger_bot'
 
 const Verdict = z.object({
@@ -87,10 +87,11 @@ export function blockedPhrase(post, phrases = []) {
  * @param {string[]} options.phrases Blocked phrases from the config file.
  * @param {string} [options.apiKey] A PostHog AI gateway key, `phs_...`. The
  *   judgment layer is off when this is absent.
- * @param {string} [options.baseURL] The AI gateway URL, without `/v1`.
+ * @param {string} [options.baseURL] The AI gateway URL. A trailing `/v1` is
+ *   dropped, because the SDK adds `/v1/messages` itself.
  * @returns {Promise<{status: 'allow'|'block'|'error', reason: string}>}
  */
-export async function gutCheck({ post, phrases, apiKey, baseURL = GATEWAY_URL_DEFAULT }) {
+export async function gutCheck({ post, phrases, apiKey, baseURL }) {
     const phrase = blockedPhrase(post, phrases)
     if (phrase) {
         return { status: 'block', reason: `The post holds the blocked phrase "${phrase}".` }
@@ -103,7 +104,7 @@ export async function gutCheck({ post, phrases, apiKey, baseURL = GATEWAY_URL_DE
     try {
         const client = new Anthropic({
             apiKey,
-            baseURL,
+            baseURL: gatewayURL(baseURL),
             defaultHeaders: { 'X-PostHog-Product': GATEWAY_PRODUCT },
         })
         const response = await client.messages.parse({
@@ -134,6 +135,17 @@ export async function gutCheck({ post, phrases, apiKey, baseURL = GATEWAY_URL_DE
 }
 
 /**
+ * Resolves the AI gateway URL that the Anthropic SDK calls.
+ *
+ * @param {string} [configured] The configured URL, with or without `/v1`.
+ * @returns {string} The URL without a trailing `/v1`.
+ */
+export function gatewayURL(configured) {
+    const url = (configured || GATEWAY_URL_DEFAULT).replace(/\/+$/, '')
+    return url.endsWith('/v1') ? url.slice(0, -'/v1'.length) : url
+}
+
+/**
  * Reads one post from the command line and prints the verdict.
  *
  * Use this to calibrate the prompt against real posts before you trust the bot,
@@ -156,7 +168,7 @@ async function checkOnePost() {
         post: { handle: 'posthog', text },
         phrases: config.blockedPhrases,
         apiKey,
-        baseURL: process.env.AI_GATEWAY_URL || GATEWAY_URL_DEFAULT,
+        baseURL: process.env.AI_GATEWAY_URL,
     })
 
     console.log(`${verdict.status.toUpperCase()}: ${verdict.reason}`)

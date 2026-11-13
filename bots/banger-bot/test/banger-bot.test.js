@@ -81,7 +81,7 @@ test('the gut check falls back to the phrase list without an API key', async () 
     assert.equal(leaving.status, 'block')
 })
 
-async function gutCheckThroughGateway(respond) {
+async function gutCheckThroughGateway(respond, suffix = '') {
     const requests = []
     const server = createServer(async (request, response) => {
         const chunks = []
@@ -104,7 +104,7 @@ async function gutCheckThroughGateway(respond) {
             post: { handle: 'posthog', text: 'we shipped a thing' },
             phrases: PHRASES,
             apiKey: 'phs_test',
-            baseURL: `http://127.0.0.1:${server.address().port}`,
+            baseURL: `http://127.0.0.1:${server.address().port}${suffix}`,
         })
         return { check, requests }
     } finally {
@@ -128,16 +128,48 @@ function verdictMessage(verdict) {
     }
 }
 
-test('the gut check calls Claude through the AI gateway', async () => {
-    const { requests } = await gutCheckThroughGateway(() =>
-        verdictMessage({ safe_to_celebrate: true, category: 'fine', reason: 'A launch.' }),
-    )
-    assert.equal(requests.length, 1)
-    assert.equal(requests[0].url, '/v1/messages')
-    assert.equal(requests[0].headers['x-api-key'], 'phs_test')
-    assert.equal(requests[0].headers['x-posthog-product'], 'banger_bot')
-    assert.equal(requests[0].body.output_config.format.type, 'json_schema')
-})
+for (const { name, suffix, read, expected } of [
+    { name: 'calls one request', suffix: '', read: (requests) => requests.length, expected: 1 },
+    {
+        name: 'calls the messages path',
+        suffix: '',
+        read: (requests) => requests[0].url,
+        expected: '/v1/messages',
+    },
+    {
+        name: 'calls the messages path when the URL ends in /v1',
+        suffix: '/v1/',
+        read: (requests) => requests[0].url,
+        expected: '/v1/messages',
+    },
+    {
+        name: 'sends the gateway key',
+        suffix: '',
+        read: (requests) => requests[0].headers['x-api-key'],
+        expected: 'phs_test',
+    },
+    {
+        name: 'sends the product header',
+        suffix: '',
+        read: (requests) => requests[0].headers['x-posthog-product'],
+        expected: 'banger_bot',
+    },
+    {
+        name: 'asks for structured output',
+        suffix: '',
+        read: (requests) => requests[0].body.output_config.format.type,
+        expected: 'json_schema',
+    },
+]) {
+    test(`the gut check through the AI gateway ${name}`, async () => {
+        const { requests } = await gutCheckThroughGateway(
+            () =>
+                verdictMessage({ safe_to_celebrate: true, category: 'fine', reason: 'A launch.' }),
+            suffix,
+        )
+        assert.equal(read(requests), expected)
+    })
+}
 
 for (const { name, response, status } of [
     {

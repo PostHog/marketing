@@ -322,7 +322,7 @@ under that product. The key is shown one time only, so paste it into the GitHub
 secret before you leave the page.
 
 The bot calls `https://ai-gateway.us.posthog.com` by default. Set
-`AI_GATEWAY_URL` to point it at another gateway. Leave `/v1` off the URL,
+`AI_GATEWAY_URL` to point it at another gateway. The bot drops a trailing `/v1`,
 because the Anthropic SDK adds `/v1/messages` itself.
 
 Create the Octolens key in **Octolens → Settings → API**. Give it the `read`
